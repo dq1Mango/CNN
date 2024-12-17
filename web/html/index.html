@@ -1,0 +1,84 @@
+<!DOCTYPE html5>
+<html>
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>Free Data!!!</title>
+  </head>
+
+  <body>
+    <main>
+      <h1 id="title">Welcome to My Website</h1>
+      <canvas id="canvas" ></canvas>   
+
+    </main>
+  </body>
+
+<script>
+
+  const canvas = document.getElementById("canvas");
+
+ //const rect = canvas.getBoundingClientRect();
+ //canvas.width = rect.width * 4;
+ //canvas.height = rect.height * 1;
+
+
+// Set the "drawn" size of the canvas
+//canvas.style.width = `${rect.width}px`;
+//canvas.style.height = `${rect.height}px`;
+
+  
+
+  function getMousePos(canvas, evt) {
+    var rect = canvas.getBoundingClientRect();
+     return {
+      x: evt.clientX - rect.left,
+      y: evt.clientY - rect.top
+    };
+  }
+  canvas.addEventListener('mousemove', function(evt) {
+   var mousePos = getMousePos(canvas, evt);
+   console.log('Mouse position: ' + mousePos.x + ',' + mousePos.y);
+  }, false);
+  
+  var array = new Array(64);
+
+  for (var i = 0; i < 64; i++) {
+    array[i] = new Array(64);
+  }
+
+  for (var i = 0; i < 64; i++) {
+    for (var j = 0; j < 64; j++) {
+      array[i][j] = false
+    }
+  }
+  
+  const title = document.getElementById("title")
+  width = window.innerWidth 
+  console.log("padding :", title.getBoundingClientRect().height)
+  height = window.innerHeight - title.getBoundingClientRect().height //yeah yeah ill fix it later
+  
+  console.log(height)
+  console.log(width)
+  size = Math.floor(height / 64)
+  pad = height % 64 / 2
+  console.log(size)
+
+  canvas.width = size * 64;  
+  canvas.height = size * 64;
+  canvas.style.top = (window.innerHeight - height) / 2
+
+  //canvas.style.width = `${size * 64}px`;
+  //canvas.style.height = `${size * 64}px`
+
+
+  const ctx = canvas.getContext("2d");
+  ctx.fillStyle = "green";
+  ctx.fillRect(0, 0, 64 * size, 64 * size)
+ 
+
+ console.log(array)
+</script>
+
+</html>
