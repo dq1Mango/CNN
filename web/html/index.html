@@ -86,35 +86,60 @@
   //ctx.fillRect(63, 61, 373, 571)
   
   let drawing = false
+  let thickness = 3
+  let pastX = 0
+  let pastY = 0
   canvas.addEventListener('mousedown', (event) => {
     console.log("real news")
     drawing = true
+    drawBox(event.offsetX, event.offsetY)
   })
   canvas.addEventListener('mouseup', (event) => {
     drawing = false
+    /*x = event.offsetX
+    y = event.offsetY
+    pastX = x
+    pastY = y*/
   })
 
   function drawBox(x, y) {
     //console.log(x * size, y * size, (x + 1)* size - 1, (y + 1) * size - 1 )
-    ctx.fillRect(x * size, y * size, size, size)
+    if (thickness % 2 == 1) {
+      startX = x - size * Math.floor(thickness / 2)
+      startY = y - size * Math.floor(thickness / 2)
+    } else {
+      startX = x - size * (1/2 + thickness / 2 - 1)
+      startY = y - size * (1/2 + thickness / 2 - 1)
+    }
+    
+    //console.log("starting at: ", startX, startY)
+    for (let i = 0; i < thickness; i++) {
+      for (let j = 0; j < thickness; j++) {
+        const x = Math.floor((startX + size * i) / size);
+        const y = Math.floor((startY + size * j) / size);
+        
+        if (x < 0 || x >= 64 || y < 0 || y >= 64) {
+          continue
+        }
+        array[y][x] = true;
+        
+        //TODO: make perfomance better ;)
+        ctx.fillRect(x * size, y * size, size, size)
+      }
+    }
     //console.log("drew")
   }
-
+    
+  
   canvas.addEventListener('mousemove', (event) => {
-    //console.log("we moved!!")
     if (! drawing) {
       return
     }
-    x = event.offsetX;
-    y = event.offsetY;
+    const x = event.offsetX;
+    const y = event.offsetY;
 
-    x = Math.floor(x / size);
-    y = Math.floor(y / size);
-
-    array[y][x] = true;
-    drawBox(x, y)
-    //console.log(x, y)
-
+    drawBox(x, y) 
+    
   });
  
 
