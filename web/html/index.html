@@ -5,12 +5,23 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="X-UA-Compatible" content="ie=edge">
     <title>Free Data!!!</title>
+    <style>
+    .center {
+  position: absolute;
+  margin: auto;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+}
+    
+    </style>
   </head>
 
   <body>
     <main>
       <h1 id="title">Welcome to My Website</h1>
-      <canvas id="canvas" ></canvas>   
+      <canvas id="canvas" class="center"></canvas>   
 
     </main>
   </body>
@@ -37,10 +48,7 @@
       y: evt.clientY - rect.top
     };
   }
-  canvas.addEventListener('mousemove', function(evt) {
-   var mousePos = getMousePos(canvas, evt);
-   console.log('Mouse position: ' + mousePos.x + ',' + mousePos.y);
-  }, false);
+  
   
   var array = new Array(64);
 
@@ -67,15 +75,47 @@
 
   canvas.width = size * 64;  
   canvas.height = size * 64;
-  canvas.style.top = (window.innerHeight - height) / 2
 
-  //canvas.style.width = `${size * 64}px`;
-  //canvas.style.height = `${size * 64}px`
-
+  console.log(canvas.width, canvas.height)
+  
 
   const ctx = canvas.getContext("2d");
-  ctx.fillStyle = "green";
-  ctx.fillRect(0, 0, 64 * size, 64 * size)
+  //ctx.fillStyle = "green";
+  //ctx.fillRect(0, 0, 64 * size, 64 * size)
+  ctx.flllStyle = "black"
+  //ctx.fillRect(63, 61, 373, 571)
+  
+  let drawing = false
+  canvas.addEventListener('mousedown', (event) => {
+    console.log("real news")
+    drawing = true
+  })
+  canvas.addEventListener('mouseup', (event) => {
+    drawing = false
+  })
+
+  function drawBox(x, y) {
+    //console.log(x * size, y * size, (x + 1)* size - 1, (y + 1) * size - 1 )
+    ctx.fillRect(x * size, y * size, size, size)
+    //console.log("drew")
+  }
+
+  canvas.addEventListener('mousemove', (event) => {
+    //console.log("we moved!!")
+    if (! drawing) {
+      return
+    }
+    x = event.offsetX;
+    y = event.offsetY;
+
+    x = Math.floor(x / size);
+    y = Math.floor(y / size);
+
+    array[y][x] = true;
+    drawBox(x, y)
+    //console.log(x, y)
+
+  });
  
 
  console.log(array)
