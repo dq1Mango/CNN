@@ -1,4 +1,4 @@
-<!DOCTYPE html5>
+<!DOCTYPE html>
 <html>
   <head>
     <meta charset="UTF-8">
@@ -7,22 +7,47 @@
     <title>Free Data!!!</title>
     <style>
     .center {
-  position: absolute;
-  margin: auto;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  left: 0;
-}
-    
+    position: absolute;
+    margin: auto;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    border: 3px solid #0000ff;
+    }
+
+    .numbers {
+    position: absolute;
+    top: 0;
+    left: 0;
+    }
+    .number {
+    font-size: 32px;
+    }
+
     </style>
   </head>
 
   <body>
     <main>
       <h1 id="title">Welcome to My Website</h1>
-      <canvas id="canvas" class="center"></canvas>   
+      <div id="test">
+        <canvas id="canvas" class="center"></canvas>   
+        <div id="numbers" class="numbers">
+        <button type="button" class="number">1</button> 
+        <br>
+        <br>
+        <button type="button" class="number">2</button> 
+        <br>
+        <br>
+        <button type="button" class="number">3</button> 
+        <br>
+        <br>
+        <button type="button" class="number">4</button> 
+      </div>
 
+      </div>
+      
     </main>
   </body>
 
@@ -63,12 +88,18 @@
   }
   
   const title = document.getElementById("title")
+  //D1 javascript-er
   width = window.innerWidth 
-  console.log("padding :", title.getBoundingClientRect().height)
-  height = window.innerHeight - title.getBoundingClientRect().height //yeah yeah ill fix it later
+  margin = window.getComputedStyle(title).marginTop
+  margin = parseInt(margin, 10) * 2
+  //console.log("padding :", title.getBoundingClientRect().height)
+  height = window.innerHeight - title.getBoundingClientRect().height - margin//yeah yeah ill fix it later
+  //height = test.getBoundingClientRect().height
   
-  console.log(height)
-  console.log(width)
+  canvas.style.top = margin
+  
+  
+
   size = Math.floor(height / 64)
   pad = height % 64 / 2
   console.log(size)
@@ -76,7 +107,12 @@
   canvas.width = size * 64;  
   canvas.height = size * 64;
 
-  console.log(canvas.width, canvas.height)
+  const numbers = document.getElementById("numbers")
+  
+  dimensions = canvas.getBoundingClientRect()
+  //numbers.style.top = margin + 100
+  console.log("ahh", dimensions.left + dimensions.width)
+  //numbers.style.left = dimensions.left + dimensions.width
   
 
   const ctx = canvas.getContext("2d");
@@ -86,7 +122,7 @@
   //ctx.fillRect(63, 61, 373, 571)
   
   let drawing = false
-  let thickness = 3
+  let thickness = 2
   let pastX = 0
   let pastY = 0
   canvas.addEventListener('mousedown', (event) => {
@@ -94,7 +130,7 @@
     drawing = true
     drawBox(event.offsetX, event.offsetY)
   })
-  canvas.addEventListener('mouseup', (event) => {
+  document.addEventListener('mouseup', (event) => {
     drawing = false
     /*x = event.offsetX
     y = event.offsetY
@@ -137,6 +173,8 @@
     }
     const x = event.offsetX;
     const y = event.offsetY;
+
+    console.log(x, y)
 
     drawBox(x, y) 
     
