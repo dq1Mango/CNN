@@ -6,20 +6,24 @@
     <meta http-equiv="X-UA-Compatible" content="ie=edge">
     <title>Free Data!!!</title>
     <style>
-    .center {
-    position: absolute;
-    margin: auto;
-    top: 0;
-    right: 0;
-    bottom: 0;
-    left: 0;
+    .container {
+    display: flex;
+    justify-content: center;
+    column-gap: 1%;
+    }
+    .canvas {
     border: 3px solid #0000ff;
     }
-
+    .outOfNames {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-evenly;
+    } 
     .numbers {
-    position: absolute;
-    top: 0;
-    left: 0;
+      flex-basis: 75%;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
     }
     .number {
     font-size: 32px;
@@ -31,19 +35,30 @@
   <body>
     <main>
       <h1 id="title">Welcome to My Website</h1>
-      <div id="test">
-        <canvas id="canvas" class="center"></canvas>   
-        <div id="numbers" class="numbers">
-        <button type="button" class="number">1</button> 
-        <br>
-        <br>
-        <button type="button" class="number">2</button> 
-        <br>
-        <br>
-        <button type="button" class="number">3</button> 
-        <br>
-        <br>
-        <button type="button" class="number">4</button> 
+      
+      <div class="container">
+        <div class="edits">
+          <button type="button" id="clear">clear</button> 
+        </div>
+        <div class="canvas">
+          <canvas id="canvas"></canvas>   
+        </div>
+        <div class="outOfNames">
+          
+          <div id="numbers" class="numbers">
+
+            <button type="button" class="number" id="0">0</button> 
+            <button type="button" class="number" id="1">1</button> 
+            <button type="button" class="number" id="2">2</button> 
+            <button type="button" class="number" id="3">3</button> 
+            <button type="button" class="number" id="4">4</button> 
+            <button type="button" class="number" id="5">5</button> 
+            <button type="button" class="number" id="6">6</button> 
+            <button type="button" class="number" id="7">7</button> 
+            <button type="button" class="number" id="8">8</button> 
+            <button type="button" class="number" id="9">9</button> 
+        </div>
+        <button type="button" class="submit">submit</button>
       </div>
 
       </div>
@@ -116,13 +131,10 @@
   
 
   const ctx = canvas.getContext("2d");
-  //ctx.fillStyle = "green";
-  //ctx.fillRect(0, 0, 64 * size, 64 * size)
   ctx.flllStyle = "black"
-  //ctx.fillRect(63, 61, 373, 571)
   
   let drawing = false
-  let thickness = 2
+  let thickness = 3
   let pastX = 0
   let pastY = 0
   canvas.addEventListener('mousedown', (event) => {
@@ -174,14 +186,106 @@
     const x = event.offsetX;
     const y = event.offsetY;
 
-    console.log(x, y)
-
     drawBox(x, y) 
     
   });
+
+  clear = document.getElementById("clear")
+  clear.addEventListener("click", (event) => {
+    ctx.clearRect(0, 0, canvas.height, canvas.width)
+    for (var i = 0; i < 64; i++) {
+    array[i] = new Array(64);
+    }
+
+    for (var i = 0; i < 64; i++) {
+      for (var j = 0; j < 64; j++) {
+        array[i][j] = false
+      }
+    }
+  })
+  
+  let selected = -1
+
+  //btton logic *forced smile*
+  button0 = document.getElementById("0")
+  button1 = document.getElementById("1")
+  button2 = document.getElementById("2")
+  button3 = document.getElementById("3")
+  button4 = document.getElementById("4")
+  button5 = document.getElementById("5")
+  button6 = document.getElementById("6")
+  button7 = document.getElementById("7")
+  button8 = document.getElementById("8")
+  button9 = document.getElementById("9")
+
+  function clearFormating() {
+
+    button0.style.background = "#e9e9ed"
+    button1.style.background = "#e9e9ed"
+    button2.style.background = "#e9e9ed"
+    button3.style.background = "#e9e9ed"
+    button4.style.background = "#e9e9ed"
+    button5.style.background = "#e9e9ed"
+    button6.style.background = "#e9e9ed"
+    button7.style.background = "#e9e9ed"
+    button8.style.background = "#e9e9ed"
+    button9.style.background = "#e9e9ed"
+
+  }
+
+
+  button0.addEventListener("click", (event) => {
+    clearFormating()
+    button0.style.background = "#ff0000"
+    selected = 0
+  })
+  button1.addEventListener("click", (event) => {
+    clearFormating()
+    button1.style.background = "#ff0000"
+    selected = 1
+  })
+ button2.addEventListener("click", (event) => {
+    clearFormating()
+    button2.style.background = "#ff0000"
+    selected = 2
+  })
+ button3.addEventListener("click", (event) => {
+    clearFormating()
+    button3.style.background = "#ff0000"
+    selected = 3
+  })
+ button4.addEventListener("click", (event) => {
+    clearFormating()
+    button4.style.background = "#ff0000"
+    selected = 4
+  })
+ button5.addEventListener("click", (event) => {
+    clearFormating()
+    button5.style.background = "#ff0000"
+    selected = 5
+  })
+ button6.addEventListener("click", (event) => {
+    clearFormating()
+    button6.style.background = "#ff0000"
+    selected = 6
+  }
+ button7.addEventListener("click", (event) => {
+    clearFormating()
+    button7.style.background = "#ff0000"
+    selected = 7
+  })
+ button8.addEventListener("click", (event) => {
+    clearFormating()
+    button8.style.background = "#ff0000"
+    selected = 8
+  })
+ button9.addEventListener("click", (event) => {
+    clearFormating()
+    button9.style.background = "#ff0000"
+    selected = 9
+  })
  
 
- console.log(array)
 </script>
 
 </html>
