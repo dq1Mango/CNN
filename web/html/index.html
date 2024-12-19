@@ -28,6 +28,29 @@
     .number {
     font-size: 32px;
     }
+    .edits {
+    display: flex;
+    flex-direction: column;
+    flex-basis: 3%;
+    row-gap: 10%;
+    }
+
+    .slider {
+    flex-basis: 25%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    writing-mode: vertical-lr;
+    text-orientation: upright;
+    }
+    
+    range:hover {
+      opacity: 1;
+    }
+
+    .erase {
+
+    }
 
     </style>
   </head>
@@ -39,6 +62,11 @@
       <div class="container">
         <div class="edits">
           <button type="button" id="clear">clear</button> 
+          <button type="button" id="erase">erase</button>
+          <div class="slider">
+            <p>Thickness</p> 
+            <input type="range" id="thickness" value="3" min="1" max="5" orient="vertical">
+          </div>
         </div>
         <div class="canvas">
           <canvas id="canvas"></canvas>   
@@ -58,7 +86,7 @@
             <button type="button" class="number" id="8">8</button> 
             <button type="button" class="number" id="9">9</button> 
         </div>
-        <button type="button" class="submit">submit</button>
+        <button type="button" class="submit" id="submit">submit</button>
       </div>
 
       </div>
@@ -169,10 +197,16 @@
         if (x < 0 || x >= 64 || y < 0 || y >= 64) {
           continue
         }
+        if (erase) {
+          array[y][x] = false;
+        ctx.clearRect(x * size, y * size, size, size)
+
+        }
+        else {
         array[y][x] = true;
-        
         //TODO: make perfomance better ;)
         ctx.fillRect(x * size, y * size, size, size)
+        }
       }
     }
     //console.log("drew")
@@ -204,6 +238,38 @@
     }
   })
   
+  slider = document.getElementById("thickness")
+  slider.oninput = function() {
+    thickness = this.value;
+  }
+  
+  erase = false
+  eraseButton = document.getElementById("erase")
+  eraseButton.addEventListener("click", (event) => {
+    if (erase) {
+      eraseButton.style.background = "#e9e9ed"
+    } 
+    else {
+      eraseButton.style.background = "#ff0000"
+    }
+    erase = ! erase
+  })
+
+  submit = document.getElementById("submit")
+  submit.addEventListener("click", (event) => {
+    if (selected == -1) {
+      return
+    }
+
+    data = {"classification": selected, "image": array}
+    console.log(data)
+    fetch("/data", {
+      method: "POST",
+      body: JSON.stringify(data)
+    }).then(res => {
+    console.log("Request complete! response:", res);
+    });
+  })
   let selected = -1
 
   //btton logic *forced smile*
@@ -268,7 +334,7 @@
     clearFormating()
     button6.style.background = "#ff0000"
     selected = 6
-  }
+  })
  button7.addEventListener("click", (event) => {
     clearFormating()
     button7.style.background = "#ff0000"

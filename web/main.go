@@ -2,6 +2,8 @@ package main
 
 import (
 	"net/http"
+	"os"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
@@ -32,6 +34,15 @@ func setupRouter() *gin.Engine {
 
 	router.GET("/index", func(c *gin.Context) {
 		c.HTML(http.StatusOK, "index.html", gin.H{})
+	})
+
+	router.POST("/data", func(c *gin.Context) {
+		classification := c.PostForm("classification")
+		image := c.PostForm("image")
+		now := time.Now()
+		currentTime := now.Format("2006-01-02 15:04:05")
+		os.WriteFile("./collected/"+string(classification)+"/"+currentTime, []byte(image), 0666)
+
 	})
 
 	return router
