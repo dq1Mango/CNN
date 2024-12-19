@@ -254,13 +254,32 @@
     }
     erase = ! erase
   })
+  
+  async function sendData(data) {
+    const formData = new FormData();
+    formData.append("classification", selected.toString())
+    formData.append("image", array.toString())
+
+    try {
+    const response = await fetch("/data", {
+      method: "POST",
+      // Set the FormData instance as the request body
+      body: formData,
+    });
+    //console.log(await response.json());
+  } catch (e) {
+    console.error(e);
+  }
+  }
 
   submit = document.getElementById("submit")
-  submit.addEventListener("click", (event) => {
+  submit.addEventListener("click", sendData) 
+    /*=> {
     if (selected == -1) {
       return
     }
-
+    
+    console.log(selected)
     data = {"classification": selected, "image": array}
     console.log(data)
     fetch("/data", {
@@ -269,7 +288,7 @@
     }).then(res => {
     console.log("Request complete! response:", res);
     });
-  })
+  })*/
   let selected = -1
 
   //btton logic *forced smile*
