@@ -15,22 +15,6 @@ func Initialize(rows, cols int) *Matrix {
 	var matrix Matrix
 
 	array := make([][]float64, rows)
-	//might want to add this later idunno
-	/*if len(initial) != 0 {
-	if len(initial) != rows {
-		return &matrix, fmt.Errorf("supplied matrix does not match row dimension")
-	}
-
-	for i, row := range initial {
-		if len(row) != cols {
-			return &matrix, fmt.Errorf("supplied matrix does match collumn dimension")
-		}
-		for j, col := range row {
-			slice[i][j] = col
-		}
-	}*/
-
-	//maybe theres a better way to do this idk
 	for i := range rows {
 		array[i] = make([]float64, cols)
 	}
@@ -82,6 +66,67 @@ func DotProduct(A, B *Matrix) (float64, error) {
 	return product, nil
 }
 
-func ReLU(num *float64) float64 {
-	return math.Max(0, *num)
+func (matrix *Matrix) slice(row, col, height, width int) (*Matrix, error) {
+
+	slice := Initialize(height, width)
+
+	if row < 0 || col < 0 || row+height > matrix.rows || col+width > matrix.cols {
+		return slice, fmt.Errorf("Index out of range")
+	}
+
+	for i := range height {
+		for j := range width {
+			(*slice.Matrix)[i][j] = (*matrix.Matrix)[i+row][j+col]
+		}
+	}
+
+	return slice, nil
+}
+
+func Flatten(matrix *Matrix) *[]float64 {
+
+	earth := []float64{} //1 AM variable names go hard
+
+	for i := range (*matrix).rows {
+		for j := range (*matrix).cols {
+			earth = append(earth, math.Max(0, (*matrix.Matrix)[i][j]))
+		}
+	}
+
+	return &earth
+}
+
+func ReLU(matrix *Matrix) {
+	for i := range (*matrix).rows {
+		for j := range (*matrix).cols {
+			(*matrix.Matrix)[i][j] = math.Max(0, (*matrix.Matrix)[i][j])
+		}
+	}
+}
+
+// TODO: add someway to pad the matrix with 0's
+func MaxPool(matrix *Matrix, size int) (*Matrix, error) {
+
+	pooled := Initialize((*matrix).rows/size, (*matrix).cols/size)
+
+	for i := 0; i < (*matrix).rows; i += size {
+		for j := 0; j < (*matrix).cols; j += size {
+			//this assumes that you have already ReLU-ed it, if not u might be cooked
+			pool, _ := (*matrix).slice(i, j, size, size)
+			flatPool := Flatten(pool)
+			max := 0.0
+
+			for _, value := range *flatPool {
+				if value > max {
+					max = value
+				}
+			}
+
+			//is this slow? idk im too tired
+			(*pooled.Matrix)[i/size][j/size] = max
+
+		}
+	}
+
+	return pooled, nil
 }

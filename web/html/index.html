@@ -126,7 +126,7 @@
 
   for (var i = 0; i < 64; i++) {
     for (var j = 0; j < 64; j++) {
-      array[i][j] = false
+      array[i][j] = 0
     }
   }
   
@@ -198,12 +198,12 @@
           continue
         }
         if (erase) {
-          array[y][x] = false;
+          array[y][x] = 0;
         ctx.clearRect(x * size, y * size, size, size)
 
         }
         else {
-        array[y][x] = true;
+        array[y][x] = 1;
         //TODO: make perfomance better ;)
         ctx.fillRect(x * size, y * size, size, size)
         }
@@ -223,20 +223,22 @@
     drawBox(x, y) 
     
   });
+  
+  function clearCanvas(event) {
+  ctx.clearRect(0, 0, canvas.height, canvas.width)
+  for (var i = 0; i < 64; i++) {
+  array[i] = new Array(64);
+  }
+
+  for (var i = 0; i < 64; i++) {
+    for (var j = 0; j < 64; j++) {
+      array[i][j] = 0
+    }
+  }
+}  
 
   clear = document.getElementById("clear")
-  clear.addEventListener("click", (event) => {
-    ctx.clearRect(0, 0, canvas.height, canvas.width)
-    for (var i = 0; i < 64; i++) {
-    array[i] = new Array(64);
-    }
-
-    for (var i = 0; i < 64; i++) {
-      for (var j = 0; j < 64; j++) {
-        array[i][j] = false
-      }
-    }
-  })
+  clear.addEventListener("click", clearCanvas)
   
   slider = document.getElementById("thickness")
   slider.oninput = function() {
@@ -265,7 +267,10 @@
       method: "POST",
       // Set the FormData instance as the request body
       body: formData,
+
     });
+
+    clearCanvas()
     //console.log(await response.json());
   } catch (e) {
     console.error(e);

@@ -2,15 +2,14 @@ package main
 
 import (
 	"fmt"
+	"github.com/gin-gonic/gin"
 	"net/http"
 	"os"
-	//"strconv"
-	"time"
-
-	"github.com/gin-gonic/gin"
+	"strconv"
 )
 
 var db = make(map[string]string)
+var count = 0
 
 type Data struct {
 	classification string
@@ -70,9 +69,8 @@ func setupRouter() *gin.Engine {
 		class := c.PostForm("classification")
 		image := c.PostForm("image")
 		fmt.Println(class)
-		now := time.Now()
-		currentTime := now.Format("2006-01-02 15:04:05")
-		os.WriteFile("./collected/"+class+"/"+currentTime, []byte(image), 0666)
+		os.WriteFile("./collected/"+class+"/"+strconv.Itoa(count), []byte(image), 0666)
+		count++
 
 	})
 
