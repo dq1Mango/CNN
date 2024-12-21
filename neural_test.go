@@ -122,10 +122,35 @@ func TestMaxPool(t *testing.T) {
 	if err != nil {
 		t.Errorf("max pooling just got dropped in a pool")
 	}
-
 	if slicesEqual((*pooled.Matrix), bluePrint) {
 		t.Log("pooling worked a grand total of once ...")
 	} else {
 		t.Errorf("welp someone is gonna crack there skull")
 	}
+}
+
+func TestConvolve(t *testing.T) {
+	A := Initialize(4, 4)
+	(*A.Matrix) = [][]float64{
+		{1, 2, 3, 4},
+		{2, 1, 4, 5},
+		{3, 4, 0, 0},
+		{0, 0, 0, 3},
+	}
+
+	B := Initialize(2, 2)
+	(*B.Matrix) = [][]float64{
+		{1, 1},
+		{-1, -1},
+	}
+
+	convolved, err := Convolve(A, B, 2)
+	if err != nil {
+		t.Error("the main thang dont work lol")
+	}
+
+	t.Log("we dont even have a test for this one so we cant fail ...")
+
+	//ok like i didnt wanna compute this by hand
+	fmt.Println((*convolved.Matrix))
 }

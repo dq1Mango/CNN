@@ -3,6 +3,8 @@ package neural
 import (
 	"fmt"
 	"math"
+	"math/rand"
+	"time"
 )
 
 type Matrix struct {
@@ -104,8 +106,32 @@ func ReLU(matrix *Matrix) {
 	}
 }
 
-// TODO: add someway to pad the matrix with 0's
+func PadRow(matrix *Matrix, padding int) {
+	for range padding {
+		var zeros = make([]float64, (*matrix).cols, (*matrix).cols)
+		for j := range (*matrix).cols {
+			zeros[j] = 0
+		}
+		(*matrix.Matrix) = append((*matrix.Matrix), zeros)
+	}
+
+	(*matrix).rows += padding
+}
+
+func PadCol(matrix *Matrix, padding int) {
+	for range padding {
+		for i := range (*matrix).rows {
+			(*matrix.Matrix)[i] = append((*matrix.Matrix)[i], 0)
+		}
+	}
+	(*matrix).cols += padding
+}
+
+// TODO: add someway to pad the matrix with 0's ... WE TO-DID IT!!!
 func MaxPool(matrix *Matrix, size int) (*Matrix, error) {
+
+	PadRow(matrix, (*matrix).rows%size)
+	PadCol(matrix, (*matrix).cols%size)
 
 	pooled := Initialize((*matrix).rows/size, (*matrix).cols/size)
 
@@ -114,19 +140,114 @@ func MaxPool(matrix *Matrix, size int) (*Matrix, error) {
 			//this assumes that you have already ReLU-ed it, if not u might be cooked
 			pool, _ := (*matrix).slice(i, j, size, size)
 			flatPool := Flatten(pool)
-			max := 0.0
+			maxx := 0.0
 
 			for _, value := range *flatPool {
-				if value > max {
-					max = value
+				if value > maxx {
+					maxx = value
 				}
 			}
-
 			//is this slow? idk im too tired
-			(*pooled.Matrix)[i/size][j/size] = max
+			(*pooled.Matrix)[i/size][j/size] = maxx
 
 		}
 	}
 
 	return pooled, nil
+}
+
+func Convolve(input, kernel *Matrix, stride int) (*Matrix, error) {
+	PadRow(input, (*input).rows%stride)
+	PadCol(input, (*input).cols%stride)
+
+	//what is this python (pt 2)
+	output := Initialize(((*input).rows-(*kernel).rows)/stride+1, ((*input).cols-(*kernel).cols)/stride+1)
+
+	for i := 0; i <= (*input).rows-(*kernel).rows; i += stride {
+		for j := 0; j <= (*input).cols-(*kernel).cols; j += stride {
+			//technically this does support non square kernels, tho i have never seen one before
+			slice, _ := input.slice(i, j, (*kernel).rows, (*kernel).cols)
+
+			dot, err := DotProduct(slice, kernel)
+			if err != nil {
+				fmt.Println("we fucked up bad")
+				return output, fmt.Errorf("uggghhhhh")
+			}
+
+			(*output.Matrix)[i/stride][j/stride] = dot
+		}
+	}
+
+	return output, nil
+}
+
+type Layer struct {
+	Operation string
+	Kernel    *Matrix //super consistent pointer usage
+	Step      int
+	Weights   *Matrix
+	Biases    *Matrix
+
+	//Operation *func()
+}
+
+func CreateReLU() *Layer {
+	return &Layer{
+		Operation: "ReLU",
+	}
+}
+
+func CreateMaxPool(size int) *Layer {
+	return &Layer{
+		Operation: "maxPool",
+		Step:      size,
+	}
+}
+
+func CreateConvolution(width, height, stride int) *Layer {
+	kernel := Initialize(height, width)
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+
+	for i := range height {
+		for j := range width {
+			(*kernel.Matrix)[i][j] = r.NormFloat64()
+		}
+	}
+
+	return &Layer{
+		Operation: "convolve",
+		Kernel:    kernel,
+		Step:      stride,
+	}
+}
+
+type Network struct {
+	Layers []Layer
+}
+
+func CreateNetwork() *Network {
+	return &Network{[]Layer{}}
+}
+
+func (network *Network) Add(layer *Layer) {
+	(*network).Layers = append((*network).Layers, *layer)
+}
+
+func (network *Network) Compute(input Matrix) (*Matrix, error) {
+	current := &input
+
+	for _, layer := range (*network).Layers {
+		//i probably should use annonomous funtions
+		if layer.Operation == "ReLU" {
+			ReLU(current)
+		} else if layer.Operation == "maxPool" {
+			current, _ = MaxPool(current, layer.Step)
+		} else if layer.Operation == "convolve" {
+			current, _ = Convolve(current, layer.Kernel, layer.Step)
+		} else {
+			panic("invalid operation key")
+		}
+	}
+
+	return current, nil
 }
