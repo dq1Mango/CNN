@@ -28,6 +28,22 @@ func Initialize(rows, cols int) *Matrix {
 	return &matrix
 }
 
+func MatrixAdd(A, B *Matrix) (*Matrix, error) {
+	result := Initialize((*A).rows, (*A).cols)
+
+	if (*A).rows != (*B).rows || (*A).cols != (*B).cols {
+		return result, fmt.Errorf("invalid dimensions")
+	}
+
+	for i := range (*A).rows {
+		for j := range (*A).cols {
+			(*result.Matrix)[i][j] = (*A.Matrix)[i][j] + (*B.Matrix)[i][j]
+		}
+	}
+
+	return result, nil
+}
+
 func MatrixMultiply(A, B *Matrix) (*Matrix, error) {
 	C := Initialize(A.rows, B.cols)
 
@@ -85,17 +101,17 @@ func (matrix *Matrix) slice(row, col, height, width int) (*Matrix, error) {
 	return slice, nil
 }
 
-func Flatten(matrix *Matrix) *[]float64 {
+func Flatten(matrix *Matrix) *Matrix {
 
-	earth := []float64{} //1 AM variable names go hard
+	earth := Initialize(1, (*matrix).rows*(*matrix).cols) //1 AM variable names go hard
 
 	for i := range (*matrix).rows {
 		for j := range (*matrix).cols {
-			earth = append(earth, math.Max(0, (*matrix.Matrix)[i][j]))
+			(*earth.Matrix)[0][i*(*matrix).cols+j] = (*matrix.Matrix)[i][j]
 		}
 	}
 
-	return &earth
+	return earth
 }
 
 func ReLU(matrix *Matrix) {
@@ -142,7 +158,7 @@ func MaxPool(matrix *Matrix, size int) (*Matrix, error) {
 			flatPool := Flatten(pool)
 			maxx := 0.0
 
-			for _, value := range *flatPool {
+			for _, value := range (*flatPool.Matrix)[0] {
 				if value > maxx {
 					maxx = value
 				}
@@ -179,6 +195,12 @@ func Convolve(input, kernel *Matrix, stride int) (*Matrix, error) {
 	}
 
 	return output, nil
+}
+
+func Dense(input, weights, biases *Matrix) (*Matrix, error) {
+	output, _ := MatrixMultiply(input, weights)
+
+	return MatrixAdd(output, biases)
 }
 
 type Layer struct {
@@ -221,6 +243,26 @@ func CreateConvolution(width, height, stride int) *Layer {
 	}
 }
 
+func CreateDense(inputSize, outputSize int) *Layer {
+
+	weights := Initialize(inputSize, outputSize)
+	biases := Initialize(1, outputSize)
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+
+	for i := range inputSize {
+		for j := range outputSize {
+			(*weights.Matrix)[i][j] = r.NormFloat64()
+			(*biases.Matrix)[0][j] = r.NormFloat64()
+		}
+	}
+
+	return &Layer{
+		Operation: "dense",
+		Kernel:    weights,
+		Biases:    biases,
+	}
+}
+
 type Network struct {
 	Layers []Layer
 }
@@ -244,6 +286,10 @@ func (network *Network) Compute(input Matrix) (*Matrix, error) {
 			current, _ = MaxPool(current, layer.Step)
 		} else if layer.Operation == "convolve" {
 			current, _ = Convolve(current, layer.Kernel, layer.Step)
+		} else if layer.Operation == "flatten" {
+			current = Flatten(current)
+		} else if layer.Operation == "dense" {
+			current, _ = Dense(current, layer.Kernel, layer.Biases)
 		} else {
 			panic("invalid operation key")
 		}
