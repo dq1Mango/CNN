@@ -2,8 +2,11 @@ package neural
 
 import (
 	"fmt"
+	"log"
 	"math"
 	"math/rand"
+	"os"
+	"strconv"
 	"time"
 )
 
@@ -296,4 +299,63 @@ func (network *Network) Compute(input Matrix) (*Matrix, error) {
 	}
 
 	return current, nil
+}
+
+type image [][]float64
+
+// this serves little purpose beyond compartmenalization
+func GetData(path string) map[int]image {
+	data := map[int]image{}
+
+	directories, err := os.ReadDir(path)
+
+	if err != nil {
+		fmt.Println("could not get ls to work")
+		panic("could not get ls to work")
+	}
+
+	//more like "Get(very specifically sorted)Data"
+	for _, dir := range directories {
+
+		files, err := os.ReadDir(path + dir.Name() + "/")
+
+		if err != nil {
+			fmt.Println("could not get ls to work for the dirs")
+			panic("could not get ls to work for the dirs")
+		}
+
+		for _, file := range files {
+			contents, err := os.ReadFile(path + dir.Name() + "/" + file.Name())
+
+			if err != nil { //wow i handle errors like 3 different ways if only i cared about errors
+				log.Fatal(err)
+			}
+
+			image := make(image, 64, 64)
+			for i := range 64 {
+				image[i] = make([]float64, 64, 64)
+			}
+
+			//lets hope your data looks exactly like mine
+			for i := 0; i < int(math.Pow(64, 2)); i++ {
+				pixel := string(contents[i*2])
+				image[i/64][i%64], err = strconv.ParseFloat(pixel, 64)
+
+				if err != nil {
+					fmt.Println("could not find \"float\"")
+				}
+			}
+
+			converted, _ := strconv.Atoi(file.Name())
+			data[converted] = image
+		}
+	}
+
+	return data
+
+}
+
+func (network *Network) Train(dataPath string, batchSize int) {
+	//data := GetData(dataPath)
+
 }
