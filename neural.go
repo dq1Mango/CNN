@@ -206,6 +206,26 @@ func Dense(input, weights, biases *Matrix) (*Matrix, error) {
 	return MatrixAdd(output, biases)
 }
 
+func softMax(input *Matrix) *Matrix {
+	total := 0.0
+
+	for _, row := range *input.Matrix {
+		for _, value := range row {
+			total += math.Pow(math.E, value)
+		}
+	}
+
+	output := Initialize((*input).rows, (*input).cols)
+
+	for i := range (*input).rows {
+		for j := range (*input).cols {
+			(*output.Matrix)[i][j] = math.Pow(math.E, (*input.Matrix)[i][j]) / total
+		}
+	}
+
+	return output
+}
+
 type Layer struct {
 	Operation string
 	Kernel    *Matrix //super consistent pointer usage
@@ -266,6 +286,12 @@ func CreateDense(inputSize, outputSize int) *Layer {
 	}
 }
 
+func CreateSoftMax() *Layer {
+	return &Layer{
+		Operation: "softMax",
+	}
+}
+
 type Network struct {
 	Layers []Layer
 }
@@ -301,7 +327,10 @@ func (network *Network) Compute(input Matrix) (*Matrix, error) {
 	return current, nil
 }
 
-type image [][]float64
+type image struct {
+	data  *Matrix
+	label int
+}
 
 // this serves little purpose beyond compartmenalization
 func GetData(path string) map[int]image {
@@ -331,15 +360,15 @@ func GetData(path string) map[int]image {
 				log.Fatal(err)
 			}
 
-			image := make(image, 64, 64)
+			pixels := Initialize(64, 64)
 			for i := range 64 {
-				image[i] = make([]float64, 64, 64)
+				(*pixels.Matrix)[i] = make([]float64, 64, 64)
 			}
 
 			//lets hope your data looks exactly like mine
 			for i := 0; i < int(math.Pow(64, 2)); i++ {
 				pixel := string(contents[i*2])
-				image[i/64][i%64], err = strconv.ParseFloat(pixel, 64)
+				(*pixels.Matrix)[i/64][i%64], err = strconv.ParseFloat(pixel, 64)
 
 				if err != nil {
 					fmt.Println("could not find \"float\"")
@@ -347,7 +376,11 @@ func GetData(path string) map[int]image {
 			}
 
 			converted, _ := strconv.Atoi(file.Name())
-			data[converted] = image
+			label, _ := strconv.Atoi(dir.Name())
+			data[converted] = image{
+				data:  pixels,
+				label: label,
+			}
 		}
 	}
 
@@ -355,7 +388,45 @@ func GetData(path string) map[int]image {
 
 }
 
-func (network *Network) Train(dataPath string, batchSize int) {
-	//data := GetData(dataPath)
+func (network *Network) Train(dataPath string, batchSize int, activation func(float64) float64) {
+	data := GetData(dataPath)
+	//														this makes me sad
+	batches := make([][]image, int(math.Ceil(float64(len(data))/float64(batchSize))))
+
+	//hopefully this is random enough
+	for index, value := range data {
+		batches[index/batchSize] = append(batches[index/batchSize], value)
+	}
+
+	length := len(network.Layers) //the boost in performance this will surely give us is monumental
+
+	for _, batch := range batches {
+		for _, image := range batch {
+			//first we have to compute what the network would evaluate each layer to be in its current state
+			stepByStep := make([]*Matrix, length)
+			stepByStep[0] = (image.data)
+
+			for index, layer := range (*network).Layers {
+				//i probably should use annonomous funtions
+				if layer.Operation == "maxPool" {
+					stepByStep[index+1], _ = MaxPool(stepByStep[index], layer.Step)
+				} else if layer.Operation == "convolve" {
+					stepByStep[index+1], _ = Convolve(stepByStep[index], layer.Kernel, layer.Step)
+					//should really generalize this but everybody ues ReLU
+					ReLU(stepByStep[index+1])
+				} else if layer.Operation == "flatten" {
+					stepByStep[index+1] = Flatten(stepByStep[index])
+				} else if layer.Operation == "dense" {
+					stepByStep[index+1], _ = Dense(stepByStep[index], layer.Kernel, layer.Biases)
+					ReLU(stepByStep[index+1])
+				} else if layer.Operation == "softMax" {
+					stepByStep[index+1] = softMax(stepByStep[index])
+				} else {
+					panic("invalid operation key")
+				}
+			}
+
+		}
+	}
 
 }
