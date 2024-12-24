@@ -24,6 +24,12 @@ func Initialize(rows, cols int) *Matrix {
 		array[i] = make([]float64, cols)
 	}
 
+	for i := range rows {
+		for j := range cols {
+			array[i][j] = 0
+		}
+	}
+
 	matrix.Matrix = &array
 	matrix.rows = rows
 	matrix.cols = cols
@@ -41,6 +47,22 @@ func MatrixAdd(A, B *Matrix) (*Matrix, error) {
 	for i := range (*A).rows {
 		for j := range (*A).cols {
 			(*result.Matrix)[i][j] = (*A.Matrix)[i][j] + (*B.Matrix)[i][j]
+		}
+	}
+
+	return result, nil
+}
+
+func MatrixSubtract(A, B *Matrix) (*Matrix, error) {
+	result := Initialize((*A).rows, (*A).cols)
+
+	if (*A).rows != (*B).rows || (*A).cols != (*B).cols {
+		return result, fmt.Errorf("invalid dimensions")
+	}
+
+	for i := range (*A).rows {
+		for j := range (*A).cols {
+			(*result.Matrix)[i][j] = (*A.Matrix)[i][j] - (*B.Matrix)[i][j]
 		}
 	}
 
@@ -197,13 +219,16 @@ func Convolve(input, kernel *Matrix, stride int) (*Matrix, error) {
 		}
 	}
 
+	ReLU(output)
+
 	return output, nil
 }
 
 func Dense(input, weights, biases *Matrix) (*Matrix, error) {
 	output, _ := MatrixMultiply(input, weights)
-
-	return MatrixAdd(output, biases)
+	output, _ = MatrixAdd(output, biases)
+	ReLU(output)
+	return output, nil
 }
 
 func softMax(input *Matrix) *Matrix {
@@ -266,6 +291,12 @@ func CreateConvolution(width, height, stride int) *Layer {
 	}
 }
 
+func CreateFlatten() *Layer {
+	return &Layer{
+		Operation: "flatten",
+	}
+}
+
 func CreateDense(inputSize, outputSize int) *Layer {
 
 	weights := Initialize(inputSize, outputSize)
@@ -292,26 +323,22 @@ func CreateSoftMax() *Layer {
 	}
 }
 
-type Network struct {
-	Layers []Layer
+type Network []Layer
+
+func CreateNetwork() Network {
+	return make(Network, 0)
 }
 
-func CreateNetwork() *Network {
-	return &Network{[]Layer{}}
+func (network Network) Add(layer *Layer) {
+	network = append(network, *layer)
 }
 
-func (network *Network) Add(layer *Layer) {
-	(*network).Layers = append((*network).Layers, *layer)
-}
-
-func (network *Network) Compute(input Matrix) (*Matrix, error) {
+func (network Network) Compute(input Matrix) (*Matrix, error) {
 	current := &input
 
-	for _, layer := range (*network).Layers {
+	for _, layer := range network {
 		//i probably should use annonomous funtions
-		if layer.Operation == "ReLU" {
-			ReLU(current)
-		} else if layer.Operation == "maxPool" {
+		if layer.Operation == "maxPool" {
 			current, _ = MaxPool(current, layer.Step)
 		} else if layer.Operation == "convolve" {
 			current, _ = Convolve(current, layer.Kernel, layer.Step)
@@ -388,7 +415,85 @@ func GetData(path string) map[int]image {
 
 }
 
-func (network *Network) Train(dataPath string, batchSize int, activation func(float64) float64) {
+func zeroNetwork(network Network) Network {
+	copyy := CreateNetwork()
+
+	for index, layer := range network {
+		if layer.Operation == "convolve" {
+			copyy.Add(CreateConvolution(layer.Kernel.rows, layer.Kernel.cols, layer.Step))
+			copyy[index].Kernel = Initialize(layer.Kernel.rows, layer.Kernel.cols)
+		} else if layer.Operation == "dense" {
+			copyy.Add(CreateDense(layer.Kernel.rows, layer.Kernel.cols))
+			copyy[index].Kernel = Initialize(layer.Kernel.rows, layer.Kernel.cols)
+		} else if layer.Operation == "maxPool" {
+			copyy.Add(CreateMaxPool(layer.Step))
+		} else if layer.Operation == "flatten" {
+			copyy.Add(CreateFlatten())
+		}
+	}
+
+	return copyy
+}
+
+func copyNetwork(network Network) Network {
+	copyy := CreateNetwork()
+
+	for _, layer := range network {
+		copyy = append(copyy, layer)
+	}
+
+	return copyy
+}
+
+func backPropogation(network, newNetwork Network, computed []Matrix, dLoss *Matrix, index int) {
+	nextStep := Initialize(computed[index-1].rows, computed[index-1].cols)
+
+	if network[index].Operation == "dense" {
+		for i, node := range (*dLoss.Matrix)[0] {
+			for weight := range network[index].Kernel.rows {
+
+				(*nextStep.Matrix)[0][weight] += (*network[index].Kernel.Matrix)[weight][i] * node
+
+				(*newNetwork[index].Kernel.Matrix)[weight][i] -= (*computed[index].Matrix)[0][weight] * node
+			}
+
+			(*newNetwork[index].Biases.Matrix)[0][i] -= node
+		}
+	} else if network[index].Operation == "convolution" {
+		kernel := network[index-1].Kernel
+		for ii := 0; ii <= (computed)[index].rows-kernel.rows; ii += network[index-1].Step {
+			for jj := 0; jj <= (computed)[index].cols-kernel.cols; jj += network[index-1].Step {
+				for i := range kernel.rows {
+					for j := range kernel.cols {
+						(*nextStep.Matrix)[ii+i][jj+j] += (*kernel.Matrix)[i][j] * (*dLoss.Matrix)[ii/network[index-1].Step][jj/network[index-1].Step]
+						//maybe this works ¯\_(ツ)_/¯ who knows really
+						(*newNetwork[index].Kernel.Matrix)[i][j] -= (*computed[index-1].Matrix)[ii+i][jj+j] * (*dLoss.Matrix)[ii/network[index-1].Step][jj/network[index-1].Step]
+					}
+				}
+				//(*output.Matrix)[i/stride][j/stride] = dot
+			}
+		}
+	} else if network[index].Operation == "flatten" {
+		for index, value := range (*computed[index].Matrix)[0] {
+			(*nextStep.Matrix)[index/nextStep.rows][index%nextStep.cols] = value
+		}
+	} else if network[index].Operation == "maxPool" {
+		//not quite sure if this is actually what you are supposed to do but i can only think of one other way to do this so were gonna try it like this
+		for i := range dLoss.rows {
+			for j := range dLoss.cols {
+				for ii := range network[index].Step {
+					for jj := range network[index].Step {
+						(*nextStep.Matrix)[i*network[index].Step+ii][j*network[index].Step+jj] = (*dLoss.Matrix)[i][j]
+					}
+				}
+			}
+		}
+	}
+
+	backPropogation(network, newNetwork, computed, nextStep, index-1)
+}
+
+func (network Network) Train(dataPath string, batchSize int, learningRate float64) {
 	data := GetData(dataPath)
 	//														this makes me sad
 	batches := make([][]image, int(math.Ceil(float64(len(data))/float64(batchSize))))
@@ -398,15 +503,19 @@ func (network *Network) Train(dataPath string, batchSize int, activation func(fl
 		batches[index/batchSize] = append(batches[index/batchSize], value)
 	}
 
-	length := len(network.Layers) //the boost in performance this will surely give us is monumental
+	length := len(network) //the boost in performance this will surely give us is monumental
+	copyable := zeroNetwork(network)
 
 	for _, batch := range batches {
+
+		changes := copyNetwork(copyable)
+
 		for _, image := range batch {
 			//first we have to compute what the network would evaluate each layer to be in its current state
 			stepByStep := make([]*Matrix, length)
 			stepByStep[0] = (image.data)
 
-			for index, layer := range (*network).Layers {
+			for index, layer := range network {
 				//i probably should use annonomous funtions
 				if layer.Operation == "maxPool" {
 					stepByStep[index+1], _ = MaxPool(stepByStep[index], layer.Step)
@@ -419,13 +528,43 @@ func (network *Network) Train(dataPath string, batchSize int, activation func(fl
 				} else if layer.Operation == "dense" {
 					stepByStep[index+1], _ = Dense(stepByStep[index], layer.Kernel, layer.Biases)
 					ReLU(stepByStep[index+1])
-				} else if layer.Operation == "softMax" {
-					stepByStep[index+1] = softMax(stepByStep[index])
 				} else {
 					panic("invalid operation key")
 				}
 			}
 
+			//we are gonna do some (more) cheating i think
+			//expected := Initialize(1, 10)
+			//(*expected.Matrix) = [][]float64{{0, 0, 0, 0, 0, 0, 0, 0, 0, 0}} //whats this Initialize function good for anyway
+			//(*expected.Matrix)[1][image.label] = 1
+
+			total := 0.0
+			input := stepByStep[length-1]
+			for _, row := range *input.Matrix {
+				for _, value := range row {
+					total += math.Pow(math.E, value)
+				}
+			}
+
+			output := Initialize((*input).rows, (*input).cols)
+
+			for i := range (*input).rows {
+				for j := range (*input).cols {
+					(*output.Matrix)[i][j] = math.Pow(math.E, (*input.Matrix)[i][j]) / total
+				}
+			}
+			exponet := math.Pow(math.E, (*output.Matrix)[0][image.label])
+			dLoss := Initialize(1, 10)
+			(*dLoss.Matrix)[0] = []float64{0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
+			(*dLoss.Matrix)[0][image.label] = (-1.0 / (*output.Matrix)[0][image.label]) * ((total)*exponet - (exponet)*(exponet)) / (total * total)
+
+			backPropogation(network, changes, []Matrix{}, dLoss, length-1)
+
+		}
+
+		//descend gradient
+		for index, layer := range network {
+			network[index].Kernel, _ = MatrixAdd(layer.Kernel, changes[index].Kernel)
 		}
 	}
 
