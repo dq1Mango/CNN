@@ -6,14 +6,15 @@ import (
 	"math"
 	"math/rand"
 	"os"
+	"runtime/debug"
 	"strconv"
 	"time"
 )
 
 type Matrix struct {
-	Matrix *[][]float64
-	rows   int
-	cols   int
+	data [][]float64
+	rows int
+	cols int
 }
 
 func Initialize(rows, cols int) *Matrix {
@@ -30,7 +31,7 @@ func Initialize(rows, cols int) *Matrix {
 		}
 	}
 
-	matrix.Matrix = &array
+	matrix.data = array
 	matrix.rows = rows
 	matrix.cols = cols
 
@@ -41,12 +42,13 @@ func MatrixAdd(A, B *Matrix) (*Matrix, error) {
 	result := Initialize((*A).rows, (*A).cols)
 
 	if (*A).rows != (*B).rows || (*A).cols != (*B).cols {
+		panic("invalid dimensions")
 		return result, fmt.Errorf("invalid dimensions")
 	}
 
 	for i := range (*A).rows {
 		for j := range (*A).cols {
-			(*result.Matrix)[i][j] = (*A.Matrix)[i][j] + (*B.Matrix)[i][j]
+			result.data[i][j] = A.data[i][j] + B.data[i][j]
 		}
 	}
 
@@ -62,7 +64,7 @@ func MatrixSubtract(A, B *Matrix) (*Matrix, error) {
 
 	for i := range (*A).rows {
 		for j := range (*A).cols {
-			(*result.Matrix)[i][j] = (*A.Matrix)[i][j] - (*B.Matrix)[i][j]
+			result.data[i][j] = A.data[i][j] - B.data[i][j]
 		}
 	}
 
@@ -72,19 +74,20 @@ func MatrixSubtract(A, B *Matrix) (*Matrix, error) {
 func MatrixMultiply(A, B *Matrix) (*Matrix, error) {
 	C := Initialize(A.rows, B.cols)
 
-	if (*A).cols != (*B).rows {
+	if A.cols != B.rows {
 		fmt.Println("error lol")
+		debug.PrintStack()
 		return C, fmt.Errorf("invalid dimensions")
 	}
 
-	for i := range (*A).rows {
-		for j := range (*B).cols {
+	for i := range A.rows {
+		for j := range B.cols {
 			sum := 0.0
-			for k := range (*A).cols {
+			for k := range A.cols {
 				//fmt.Println(i, j, k)
-				sum += (*A.Matrix)[i][k] * (*B.Matrix)[k][j]
+				sum += A.data[i][k] * B.data[k][j]
 			}
-			(*C.Matrix)[i][j] = sum
+			C.data[i][j] = sum
 		}
 
 	}
@@ -95,14 +98,14 @@ func MatrixMultiply(A, B *Matrix) (*Matrix, error) {
 func DotProduct(A, B *Matrix) (float64, error) {
 	product := 0.0
 
-	if (*A).rows != (*B).rows || (*A).cols != (*B).cols {
+	if A.rows != B.rows || A.cols != B.cols {
 		fmt.Println("invalid dimensions")
 		return product, fmt.Errorf("invalid dimensions")
 	}
 
-	for i := range (*A).rows {
-		for j := range (*A).cols {
-			product += (*A.Matrix)[i][j] * (*B.Matrix)[i][j]
+	for i := range A.rows {
+		for j := range A.cols {
+			product += A.data[i][j] * B.data[i][j]
 		}
 	}
 
@@ -119,7 +122,7 @@ func (matrix *Matrix) slice(row, col, height, width int) (*Matrix, error) {
 
 	for i := range height {
 		for j := range width {
-			(*slice.Matrix)[i][j] = (*matrix.Matrix)[i+row][j+col]
+			slice.data[i][j] = matrix.data[i+row][j+col]
 		}
 	}
 
@@ -128,11 +131,11 @@ func (matrix *Matrix) slice(row, col, height, width int) (*Matrix, error) {
 
 func Flatten(matrix *Matrix) *Matrix {
 
-	earth := Initialize(1, (*matrix).rows*(*matrix).cols) //1 AM variable names go hard
+	earth := Initialize(1, matrix.rows*matrix.cols) //1 AM variable names go hard
 
-	for i := range (*matrix).rows {
-		for j := range (*matrix).cols {
-			(*earth.Matrix)[0][i*(*matrix).cols+j] = (*matrix.Matrix)[i][j]
+	for i := range matrix.rows {
+		for j := range matrix.cols {
+			earth.data[0][i*(*matrix).cols+j] = matrix.data[i][j]
 		}
 	}
 
@@ -140,56 +143,56 @@ func Flatten(matrix *Matrix) *Matrix {
 }
 
 func ReLU(matrix *Matrix) {
-	for i := range (*matrix).rows {
-		for j := range (*matrix).cols {
-			(*matrix.Matrix)[i][j] = math.Max(0, (*matrix.Matrix)[i][j])
+	for i := range matrix.rows {
+		for j := range matrix.cols {
+			matrix.data[i][j] = math.Max(0, matrix.data[i][j])
 		}
 	}
 }
 
 func PadRow(matrix *Matrix, padding int) {
 	for range padding {
-		var zeros = make([]float64, (*matrix).cols, (*matrix).cols)
-		for j := range (*matrix).cols {
+		var zeros = make([]float64, matrix.cols, matrix.cols)
+		for j := range matrix.cols {
 			zeros[j] = 0
 		}
-		(*matrix.Matrix) = append((*matrix.Matrix), zeros)
+		matrix.data = append(matrix.data, zeros)
 	}
 
-	(*matrix).rows += padding
+	matrix.rows += padding
 }
 
 func PadCol(matrix *Matrix, padding int) {
 	for range padding {
-		for i := range (*matrix).rows {
-			(*matrix.Matrix)[i] = append((*matrix.Matrix)[i], 0)
+		for i := range matrix.rows {
+			matrix.data[i] = append(matrix.data[i], 0)
 		}
 	}
-	(*matrix).cols += padding
+	matrix.cols += padding
 }
 
 // TODO: add someway to pad the matrix with 0's ... WE TO-DID IT!!!
 func MaxPool(matrix *Matrix, size int) (*Matrix, error) {
 
-	PadRow(matrix, (*matrix).rows%size)
-	PadCol(matrix, (*matrix).cols%size)
+	PadRow(matrix, matrix.rows%size)
+	PadCol(matrix, matrix.cols%size)
 
-	pooled := Initialize((*matrix).rows/size, (*matrix).cols/size)
+	pooled := Initialize(matrix.rows/size, matrix.cols/size)
 
-	for i := 0; i < (*matrix).rows; i += size {
-		for j := 0; j < (*matrix).cols; j += size {
+	for i := 0; i < matrix.rows; i += size {
+		for j := 0; j < matrix.cols; j += size {
 			//this assumes that you have already ReLU-ed it, if not u might be cooked
-			pool, _ := (*matrix).slice(i, j, size, size)
+			pool, _ := matrix.slice(i, j, size, size)
 			flatPool := Flatten(pool)
 			maxx := 0.0
 
-			for _, value := range (*flatPool.Matrix)[0] {
+			for _, value := range (flatPool.data)[0] {
 				if value > maxx {
 					maxx = value
 				}
 			}
 			//is this slow? idk im too tired
-			(*pooled.Matrix)[i/size][j/size] = maxx
+			pooled.data[i/size][j/size] = maxx
 
 		}
 	}
@@ -198,16 +201,16 @@ func MaxPool(matrix *Matrix, size int) (*Matrix, error) {
 }
 
 func Convolve(input, kernel *Matrix, stride int) (*Matrix, error) {
-	PadRow(input, (*input).rows%stride)
-	PadCol(input, (*input).cols%stride)
+	PadRow(input, input.rows%stride)
+	PadCol(input, input.cols%stride)
 
 	//what is this python (pt 2)
-	output := Initialize(((*input).rows-(*kernel).rows)/stride+1, ((*input).cols-(*kernel).cols)/stride+1)
+	output := Initialize((input.rows-kernel.rows)/stride+1, (input.cols-kernel.cols)/stride+1)
 
-	for i := 0; i <= (*input).rows-(*kernel).rows; i += stride {
-		for j := 0; j <= (*input).cols-(*kernel).cols; j += stride {
+	for i := 0; i <= input.rows-kernel.rows; i += stride {
+		for j := 0; j <= input.cols-kernel.cols; j += stride {
 			//technically this does support non square kernels, tho i have never seen one before
-			slice, _ := input.slice(i, j, (*kernel).rows, (*kernel).cols)
+			slice, _ := input.slice(i, j, kernel.rows, kernel.cols)
 
 			dot, err := DotProduct(slice, kernel)
 			if err != nil {
@@ -215,7 +218,7 @@ func Convolve(input, kernel *Matrix, stride int) (*Matrix, error) {
 				return output, fmt.Errorf("uggghhhhh")
 			}
 
-			(*output.Matrix)[i/stride][j/stride] = dot
+			output.data[i/stride][j/stride] = dot
 		}
 	}
 
@@ -234,17 +237,17 @@ func Dense(input, weights, biases *Matrix) (*Matrix, error) {
 func softMax(input *Matrix) *Matrix {
 	total := 0.0
 
-	for _, row := range *input.Matrix {
+	for _, row := range input.data {
 		for _, value := range row {
 			total += math.Pow(math.E, value)
 		}
 	}
 
-	output := Initialize((*input).rows, (*input).cols)
+	output := Initialize(input.rows, input.cols)
 
-	for i := range (*input).rows {
-		for j := range (*input).cols {
-			(*output.Matrix)[i][j] = math.Pow(math.E, (*input.Matrix)[i][j]) / total
+	for i := range input.rows {
+		for j := range input.cols {
+			output.data[i][j] = math.Pow(math.E, input.data[i][j]) / total
 		}
 	}
 
@@ -280,7 +283,7 @@ func CreateConvolution(width, height, stride int) *Layer {
 
 	for i := range height {
 		for j := range width {
-			(*kernel.Matrix)[i][j] = r.NormFloat64()
+			kernel.data[i][j] = r.NormFloat64()
 		}
 	}
 
@@ -305,8 +308,8 @@ func CreateDense(inputSize, outputSize int) *Layer {
 
 	for i := range inputSize {
 		for j := range outputSize {
-			(*weights.Matrix)[i][j] = r.NormFloat64()
-			(*biases.Matrix)[0][j] = r.NormFloat64()
+			weights.data[i][j] = r.NormFloat64()
+			biases.data[0][j] = r.NormFloat64()
 		}
 	}
 
@@ -329,8 +332,8 @@ func CreateNetwork() Network {
 	return make(Network, 0)
 }
 
-func (network Network) Add(layer *Layer) {
-	network = append(network, *layer)
+func (network *Network) Add(layer *Layer) {
+	*network = append(*network, *layer)
 }
 
 func (network Network) Compute(input Matrix) (*Matrix, error) {
@@ -357,6 +360,29 @@ func (network Network) Compute(input Matrix) (*Matrix, error) {
 type image struct {
 	data  *Matrix
 	label int
+}
+
+func GetImage(path string) *Matrix {
+	contents, err := os.ReadFile(path)
+	if err != nil {
+		panic(err)
+	}
+	pixels := Initialize(64, 64)
+	for i := range 64 {
+		pixels.data[i] = make([]float64, 64, 64)
+	}
+
+	//lets hope your data looks exactly like mine
+	for i := 0; i < int(math.Pow(64, 2)); i++ {
+		pixel := string(contents[i*2])
+		pixels.data[i/64][i%64], err = strconv.ParseFloat(pixel, 64)
+
+		if err != nil {
+			fmt.Println("could not find \"float\"")
+		}
+	}
+
+	return pixels
 }
 
 // this serves little purpose beyond compartmenalization
@@ -389,13 +415,13 @@ func GetData(path string) map[int]image {
 
 			pixels := Initialize(64, 64)
 			for i := range 64 {
-				(*pixels.Matrix)[i] = make([]float64, 64, 64)
+				pixels.data[i] = make([]float64, 64, 64)
 			}
 
 			//lets hope your data looks exactly like mine
 			for i := 0; i < int(math.Pow(64, 2)); i++ {
 				pixel := string(contents[i*2])
-				(*pixels.Matrix)[i/64][i%64], err = strconv.ParseFloat(pixel, 64)
+				pixels.data[i/64][i%64], err = strconv.ParseFloat(pixel, 64)
 
 				if err != nil {
 					fmt.Println("could not find \"float\"")
@@ -435,47 +461,49 @@ func zeroNetwork(network Network) Network {
 	return copyy
 }
 
-func copyNetwork(network Network) Network {
+/*func copyNetwork(network Network) Network {
 	copyy := CreateNetwork()
 
 	for _, layer := range network {
-		copyy = append(copyy, layer)
+		copyy = append(copyy, &Layer{
+
+		})
 	}
 
 	return copyy
-}
+}*/
 
-func backPropogation(network, newNetwork Network, computed []Matrix, dLoss *Matrix, index int) {
-	nextStep := Initialize(computed[index-1].rows, computed[index-1].cols)
+func backPropogation(network, newNetwork Network, computed []*Matrix, dLoss *Matrix, index int) {
+	nextStep := Initialize(computed[index].rows, computed[index].cols)
 
 	if network[index].Operation == "dense" {
-		for i, node := range (*dLoss.Matrix)[0] {
+		for i, node := range dLoss.data[0] {
 			for weight := range network[index].Kernel.rows {
 
-				(*nextStep.Matrix)[0][weight] += (*network[index].Kernel.Matrix)[weight][i] * node
+				nextStep.data[0][weight] += (network[index].Kernel.data[weight][i] * node)
 
-				(*newNetwork[index].Kernel.Matrix)[weight][i] -= (*computed[index].Matrix)[0][weight] * node
+				newNetwork[index].Kernel.data[weight][i] -= (computed[index].data[0][weight] * node)
 			}
 
-			(*newNetwork[index].Biases.Matrix)[0][i] -= node
+			newNetwork[index].Biases.data[0][i] -= node
 		}
-	} else if network[index].Operation == "convolution" {
-		kernel := network[index-1].Kernel
-		for ii := 0; ii <= (computed)[index].rows-kernel.rows; ii += network[index-1].Step {
-			for jj := 0; jj <= (computed)[index].cols-kernel.cols; jj += network[index-1].Step {
+	} else if network[index].Operation == "convolve" {
+		kernel := network[index].Kernel
+		for ii := 0; ii <= computed[index].rows-kernel.rows; ii += network[index].Step {
+			for jj := 0; jj <= computed[index].cols-kernel.cols; jj += network[index].Step {
 				for i := range kernel.rows {
 					for j := range kernel.cols {
-						(*nextStep.Matrix)[ii+i][jj+j] += (*kernel.Matrix)[i][j] * (*dLoss.Matrix)[ii/network[index-1].Step][jj/network[index-1].Step]
+						nextStep.data[ii+i][jj+j] += kernel.data[i][j] * dLoss.data[ii/network[index].Step][jj/network[index].Step]
 						//maybe this works ¯\_(ツ)_/¯ who knows really
-						(*newNetwork[index].Kernel.Matrix)[i][j] -= (*computed[index-1].Matrix)[ii+i][jj+j] * (*dLoss.Matrix)[ii/network[index-1].Step][jj/network[index-1].Step]
+						newNetwork[index].Kernel.data[i][j] -= computed[index].data[ii+i][jj+j] * dLoss.data[ii/network[index].Step][jj/network[index].Step]
 					}
 				}
-				//(*output.Matrix)[i/stride][j/stride] = dot
+				//(*output.data)[i/stride][j/stride] = dot
 			}
 		}
 	} else if network[index].Operation == "flatten" {
-		for index, value := range (*computed[index].Matrix)[0] {
-			(*nextStep.Matrix)[index/nextStep.rows][index%nextStep.cols] = value
+		for index, value := range computed[index].data[0] {
+			nextStep.data[index/nextStep.rows][index%nextStep.cols] = value
 		}
 	} else if network[index].Operation == "maxPool" {
 		//not quite sure if this is actually what you are supposed to do but i can only think of one other way to do this so were gonna try it like this
@@ -483,13 +511,17 @@ func backPropogation(network, newNetwork Network, computed []Matrix, dLoss *Matr
 			for j := range dLoss.cols {
 				for ii := range network[index].Step {
 					for jj := range network[index].Step {
-						(*nextStep.Matrix)[i*network[index].Step+ii][j*network[index].Step+jj] = (*dLoss.Matrix)[i][j]
+						nextStep.data[i*network[index].Step+ii][j*network[index].Step+jj] = dLoss.data[i][j]
 					}
 				}
 			}
 		}
+	} else {
+		panic("no operation matched: " + network[index].Operation)
 	}
-
+	if index == 0 {
+		return
+	}
 	backPropogation(network, newNetwork, computed, nextStep, index-1)
 }
 
@@ -504,18 +536,21 @@ func (network Network) Train(dataPath string, batchSize int, learningRate float6
 	}
 
 	length := len(network) //the boost in performance this will surely give us is monumental
-	copyable := zeroNetwork(network)
 
-	for _, batch := range batches {
+	for batcDex, batch := range batches {
+		if batcDex > 0 {
+			break
+		}
 
-		changes := copyNetwork(copyable)
+		changes := zeroNetwork(network)
 
 		for _, image := range batch {
 			//first we have to compute what the network would evaluate each layer to be in its current state
-			stepByStep := make([]*Matrix, length)
-			stepByStep[0] = (image.data)
+			stepByStep := make([]*Matrix, length+1)
+			stepByStep[0] = image.data
 
 			for index, layer := range network {
+
 				//i probably should use annonomous funtions
 				if layer.Operation == "maxPool" {
 					stepByStep[index+1], _ = MaxPool(stepByStep[index], layer.Step)
@@ -535,37 +570,53 @@ func (network Network) Train(dataPath string, batchSize int, learningRate float6
 
 			//we are gonna do some (more) cheating i think
 			//expected := Initialize(1, 10)
-			//(*expected.Matrix) = [][]float64{{0, 0, 0, 0, 0, 0, 0, 0, 0, 0}} //whats this Initialize function good for anyway
-			//(*expected.Matrix)[1][image.label] = 1
+			//(*expected.data) = [][]float64{{0, 0, 0, 0, 0, 0, 0, 0, 0, 0}} //whats this Initialize function good for anyway
+			//(*expected.data)[1][image.label] = 1
 
 			total := 0.0
-			input := stepByStep[length-1]
-			for _, row := range *input.Matrix {
+			input := stepByStep[length]
+			for _, row := range input.data {
 				for _, value := range row {
 					total += math.Pow(math.E, value)
 				}
 			}
 
-			output := Initialize((*input).rows, (*input).cols)
+			output := Initialize(input.rows, input.cols)
 
 			for i := range (*input).rows {
 				for j := range (*input).cols {
-					(*output.Matrix)[i][j] = math.Pow(math.E, (*input.Matrix)[i][j]) / total
+					output.data[i][j] = math.Pow(math.E, input.data[i][j]) / total
 				}
 			}
-			exponet := math.Pow(math.E, (*output.Matrix)[0][image.label])
-			dLoss := Initialize(1, 10)
-			(*dLoss.Matrix)[0] = []float64{0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
-			(*dLoss.Matrix)[0][image.label] = (-1.0 / (*output.Matrix)[0][image.label]) * ((total)*exponet - (exponet)*(exponet)) / (total * total)
 
-			backPropogation(network, changes, []Matrix{}, dLoss, length-1)
+			exponet := math.Pow(math.E, output.data[0][image.label])
+			dLoss := Initialize(1, 10)
+			dLoss.data[0] = []float64{0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
+			//dF:=math.IsNaN()
+			if total == 0.0 {
+				print("we found our culprit\n")
+			}
+			dLoss.data[0][image.label] = (-1.0 / output.data[0][image.label]) * ((total)*exponet - (exponet)*(exponet)) / (total * total)
+
+			//for i, step := range stepByStep {
+			//	fmt.Println(i, ": ", step)
+			//}
+			//fdshauiovsjalkdfldk
+			backPropogation(network, changes, stepByStep, dLoss, length-1)
 
 		}
 
 		//descend gradient
 		for index, layer := range network {
-			network[index].Kernel, _ = MatrixAdd(layer.Kernel, changes[index].Kernel)
+			if layer.Operation == "convolve" || layer.Operation == "dense" {
+				network[index].Kernel, _ = MatrixAdd(layer.Kernel, changes[index].Kernel)
+			}
 		}
 	}
+	/*for index, layer := range network {
+		if layer.Operation == "convolve" || layer.Operation == "dense" {
+			fmt.Println(index, ": ", layer.Kernel)
+		}
+	}*/
 
 }
