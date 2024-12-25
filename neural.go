@@ -95,6 +95,17 @@ func MatrixMultiply(A, B *Matrix) (*Matrix, error) {
 	return C, nil
 }
 
+func Sum(matrix *Matrix) float64 {
+	sum := 0.0
+	for _, row := range matrix.data {
+		for _, value := range row {
+			sum += value
+		}
+	}
+
+	return sum
+}
+
 func DotProduct(A, B *Matrix) (float64, error) {
 	product := 0.0
 
@@ -129,6 +140,14 @@ func (matrix *Matrix) slice(row, col, height, width int) (*Matrix, error) {
 	return slice, nil
 }
 
+func (matrix *Matrix) scale(scaler float64) {
+	for i := range matrix.rows {
+		for j := range matrix.cols {
+			matrix.data[i][j] *= scaler
+		}
+	}
+}
+
 func Flatten(matrix *Matrix) *Matrix {
 
 	earth := Initialize(1, matrix.rows*matrix.cols) //1 AM variable names go hard
@@ -145,6 +164,10 @@ func Flatten(matrix *Matrix) *Matrix {
 func ReLU(matrix *Matrix) {
 	for i := range matrix.rows {
 		for j := range matrix.cols {
+			//the leaky verison
+			/*if matrix.data[i][j] < 0 {
+				matrix.data[i][j] *= 0.05
+			}*/
 			matrix.data[i][j] = math.Max(0, matrix.data[i][j])
 		}
 	}
@@ -336,11 +359,17 @@ func (network *Network) Add(layer *Layer) {
 	*network = append(*network, *layer)
 }
 
+func truncateFloat(f float64, decimals int) float64 {
+	shift := math.Pow10(decimals)
+	return math.Trunc(f*shift) / shift
+}
+
 func (network Network) Compute(input Matrix) (*Matrix, error) {
 	current := &input
 
 	for _, layer := range network {
 		//i probably should use annonomous funtions
+		//fmt.Println(current)
 		if layer.Operation == "maxPool" {
 			current, _ = MaxPool(current, layer.Step)
 		} else if layer.Operation == "convolve" {
@@ -354,7 +383,22 @@ func (network Network) Compute(input Matrix) (*Matrix, error) {
 		}
 	}
 
-	return current, nil
+	total := 0.0
+	for _, row := range current.data {
+		for _, value := range row {
+			total += math.Pow(math.E, value)
+		}
+	}
+
+	output := Initialize(current.rows, current.cols)
+
+	for i := range current.rows {
+		for j := range current.cols {
+			output.data[i][j] = truncateFloat(math.Pow(math.E, current.data[i][j])/total, 5)
+		}
+	}
+
+	return output, nil
 }
 
 type image struct {
@@ -386,8 +430,8 @@ func GetImage(path string) *Matrix {
 }
 
 // this serves little purpose beyond compartmenalization
-func GetData(path string) map[int]image {
-	data := map[int]image{}
+func GetData(path string) []image {
+	data := make([]image, 0, 770)
 
 	directories, err := os.ReadDir(path)
 
@@ -402,7 +446,7 @@ func GetData(path string) map[int]image {
 		files, err := os.ReadDir(path + dir.Name() + "/")
 
 		if err != nil {
-			fmt.Println("could not get ls to work for the dirs")
+			fmt.Println("could not get ls to work for the dirs", path)
 			panic("could not get ls to work for the dirs")
 		}
 
@@ -428,12 +472,12 @@ func GetData(path string) map[int]image {
 				}
 			}
 
-			converted, _ := strconv.Atoi(file.Name())
+			//converted, _ := strconv.Atoi(file.Name())
 			label, _ := strconv.Atoi(dir.Name())
-			data[converted] = image{
+			data = append(data, image{
 				data:  pixels,
 				label: label,
-			}
+			})
 		}
 	}
 
@@ -473,7 +517,16 @@ func zeroNetwork(network Network) Network {
 	return copyy
 }*/
 
+func sign(n float64) float64 {
+	if n < 0 {
+		return -1
+	} else {
+		return 1
+	}
+}
+
 func backPropogation(network, newNetwork Network, computed []*Matrix, dLoss *Matrix, index int) {
+	//fmt.Println("cant find it: ", dLoss)
 	nextStep := Initialize(computed[index].rows, computed[index].cols)
 
 	if network[index].Operation == "dense" {
@@ -481,20 +534,24 @@ func backPropogation(network, newNetwork Network, computed []*Matrix, dLoss *Mat
 			for weight := range network[index].Kernel.rows {
 
 				nextStep.data[0][weight] += (network[index].Kernel.data[weight][i] * node)
-
+				//fmt.Println("before: ", newNetwork[index].Kernel.data[weight][i])
+				//fmt.Println((computed[index].data[0][weight] * node))
 				newNetwork[index].Kernel.data[weight][i] -= (computed[index].data[0][weight] * node)
+				//fmt.Println("after: ", newNetwork[index].Kernel.data[weight][i])
 			}
-
 			newNetwork[index].Biases.data[0][i] -= node
 		}
 	} else if network[index].Operation == "convolve" {
+		//if index == 2 {
+		//	fmt.Println("cant find it: ", dLoss)
+		//}
 		kernel := network[index].Kernel
 		for ii := 0; ii <= computed[index].rows-kernel.rows; ii += network[index].Step {
 			for jj := 0; jj <= computed[index].cols-kernel.cols; jj += network[index].Step {
 				for i := range kernel.rows {
 					for j := range kernel.cols {
 						nextStep.data[ii+i][jj+j] += kernel.data[i][j] * dLoss.data[ii/network[index].Step][jj/network[index].Step]
-						//maybe this works ¯\_(ツ)_/¯ who knows really
+						//maybe this will work ¯\_(ツ)_/¯ who knows really
 						newNetwork[index].Kernel.data[i][j] -= computed[index].data[ii+i][jj+j] * dLoss.data[ii/network[index].Step][jj/network[index].Step]
 					}
 				}
@@ -502,7 +559,7 @@ func backPropogation(network, newNetwork Network, computed []*Matrix, dLoss *Mat
 			}
 		}
 	} else if network[index].Operation == "flatten" {
-		for index, value := range computed[index].data[0] {
+		for index, value := range dLoss.data[0] {
 			nextStep.data[index/nextStep.rows][index%nextStep.cols] = value
 		}
 	} else if network[index].Operation == "maxPool" {
@@ -525,12 +582,38 @@ func backPropogation(network, newNetwork Network, computed []*Matrix, dLoss *Mat
 	backPropogation(network, newNetwork, computed, nextStep, index-1)
 }
 
-func (network Network) Train(dataPath string, batchSize int, learningRate float64) {
-	data := GetData(dataPath)
+func MakeUpData() []image {
+	data := make([]image, 1000)
+	for i := range 10 {
+		for j := range 100 {
+			barelyMatrix := Initialize(1, 1)
+			barelyMatrix.data[0][0] = float64(i)
+			data[i*100+j] = image{
+				data:  barelyMatrix,
+				label: 2*i + 10,
+			}
+		}
+	}
+	return data
+}
+
+func MakeUpTestData() *Matrix {
+	test := Initialize(1, 1)
+	test.data[0][0] = 101
+	return test
+}
+
+func (network Network) Train(data []image, batchSize int, learningRate float64) {
 	//														this makes me sad
 	batches := make([][]image, int(math.Ceil(float64(len(data))/float64(batchSize))))
 
-	//hopefully this is random enough
+	//randomize the order
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+
+	r.Shuffle(len(data), func(i, j int) {
+		data[i], data[j] = data[j], data[i]
+	})
+
 	for index, value := range data {
 		batches[index/batchSize] = append(batches[index/batchSize], value)
 	}
@@ -538,7 +621,7 @@ func (network Network) Train(dataPath string, batchSize int, learningRate float6
 	length := len(network) //the boost in performance this will surely give us is monumental
 
 	for batcDex, batch := range batches {
-		if batcDex > 0 {
+		if batcDex < 0 { //> 77 {
 			break
 		}
 
@@ -550,7 +633,7 @@ func (network Network) Train(dataPath string, batchSize int, learningRate float6
 			stepByStep[0] = image.data
 
 			for index, layer := range network {
-
+				//fmt.Println(stepByStep[index].rows, stepByStep[index].cols)
 				//i probably should use annonomous funtions
 				if layer.Operation == "maxPool" {
 					stepByStep[index+1], _ = MaxPool(stepByStep[index], layer.Step)
@@ -582,7 +665,6 @@ func (network Network) Train(dataPath string, batchSize int, learningRate float6
 			}
 
 			output := Initialize(input.rows, input.cols)
-
 			for i := range (*input).rows {
 				for j := range (*input).cols {
 					output.data[i][j] = math.Pow(math.E, input.data[i][j]) / total
@@ -592,15 +674,24 @@ func (network Network) Train(dataPath string, batchSize int, learningRate float6
 			exponet := math.Pow(math.E, output.data[0][image.label])
 			dLoss := Initialize(1, 10)
 			dLoss.data[0] = []float64{0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
-			//dF:=math.IsNaN()
-			if total == 0.0 {
-				print("we found our culprit\n")
-			}
-			dLoss.data[0][image.label] = (-1.0 / output.data[0][image.label]) * ((total)*exponet - (exponet)*(exponet)) / (total * total)
+			entropySlope := (-1.0 / output.data[0][image.label])
+			totalSquared := total * total
+			for i := range dLoss.cols {
+				if i == image.label {
 
-			//for i, step := range stepByStep {
-			//	fmt.Println(i, ": ", step)
-			//}
+					dLoss.data[0][i] = entropySlope * ((total)*exponet - (exponet)*(exponet)) / (totalSquared)
+				} else {
+					dLoss.data[0][i] = entropySlope * -1 * exponet / totalSquared
+				}
+			}
+
+			if math.IsNaN(dLoss.data[0][image.label]) {
+				//fmt.Println("continueing")
+				continue
+			}
+
+			//dLoss := Initialize(1, 1)
+			//dLoss.data[0][0] = 2 * (stepByStep[length].data[0][0] - float64(image.label))
 			//fdshauiovsjalkdfldk
 			backPropogation(network, changes, stepByStep, dLoss, length-1)
 
@@ -609,14 +700,39 @@ func (network Network) Train(dataPath string, batchSize int, learningRate float6
 		//descend gradient
 		for index, layer := range network {
 			if layer.Operation == "convolve" || layer.Operation == "dense" {
+				changes[index].Kernel.scale(learningRate)
 				network[index].Kernel, _ = MatrixAdd(layer.Kernel, changes[index].Kernel)
+				if layer.Operation == "dense" {
+					changes[index].Biases.scale(learningRate * 500)
+					network[index].Biases, _ = MatrixAdd(layer.Biases, changes[index].Biases)
+				}
+			}
+		}
+		//fmt.Println("new network: ", network[0].Kernel, network[0].Biases)
+	}
+	fmt.Println()
+	for index, layer := range network {
+		if layer.Operation == "convolve" { //|| layer.Operation == "dense" {
+			fmt.Println(index, ": ", layer.Kernel)
+		}
+
+		if layer.Operation == "dense" {
+			//fmt.Println(index, ": ", layer.Kernel)
+			fmt.Println(index, ": ", layer.Biases)
+
+		}
+	}
+
+}
+
+func hasNaN(matrix *Matrix) bool {
+	for i := range matrix.rows {
+		for j := range matrix.cols {
+			if math.IsNaN(matrix.data[i][j]) {
+				return true
 			}
 		}
 	}
-	/*for index, layer := range network {
-		if layer.Operation == "convolve" || layer.Operation == "dense" {
-			fmt.Println(index, ": ", layer.Kernel)
-		}
-	}*/
 
+	return false
 }
