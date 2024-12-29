@@ -12,9 +12,7 @@ func slicesEqual(a, b [][]float64) bool {
 
 	for i, row := range a {
 		for j := range row {
-
 			if a[i][j] != b[i][j] {
-
 				return false
 			}
 		}
@@ -25,14 +23,14 @@ func slicesEqual(a, b [][]float64) bool {
 
 func TestMatrixMultiply(t *testing.T) {
 	A := Initialize(3, 4)
-	(*A.Matrix) = [][]float64{
+	A.data = [][]float64{
 		{1, 2, 3, 4},
 		{2, 3, 4, 5},
 		{3, 4, 5, 6},
 	}
 
 	B := Initialize(4, 2)
-	(*B.Matrix) = [][]float64{
+	B.data = [][]float64{
 		{1, 2},
 		{3, 4},
 		{5, 6},
@@ -43,7 +41,7 @@ func TestMatrixMultiply(t *testing.T) {
 	if err != nil {
 		t.Errorf("thinks the dimensions r off lol")
 	}
-	if slicesEqual(*result.Matrix, [][]float64{
+	if slicesEqual(result.data, [][]float64{
 		{50, 60}, {66, 80}, {82, 100},
 	}) {
 		t.Log("Basic MM test passed ...")
@@ -57,7 +55,7 @@ func TestMatrixMultiply(t *testing.T) {
 
 func TestMatrixSlice(t *testing.T) {
 	A := Initialize(3, 4)
-	(*A.Matrix) = [][]float64{
+	A.data = [][]float64{
 		{1, 2, 3, 4},
 		{2, 3, 4, 5},
 		{3, 4, 5, 6},
@@ -73,17 +71,17 @@ func TestMatrixSlice(t *testing.T) {
 		t.Errorf("you fucked up slicing matricies")
 	}
 
-	if slicesEqual(*subSet.Matrix, expected) {
+	if slicesEqual(subSet.data, expected) {
 		t.Log("super thourough slice test passed...")
 	} else {
 		t.Errorf("womp womp slices dont work")
-		fmt.Println((*subSet.Matrix))
+		fmt.Println((subSet.data))
 	}
 }
 
 func TestReLU(t *testing.T) {
 	A := Initialize(3, 4)
-	(*A.Matrix) = [][]float64{
+	A.data = [][]float64{
 		{1, 2, 3, 4},
 		{2, -1, 4, 5},
 		{3, 4, -0.2, -2},
@@ -97,7 +95,7 @@ func TestReLU(t *testing.T) {
 
 	ReLU(A)
 
-	if slicesEqual(*A.Matrix, activated) {
+	if slicesEqual(A.data, activated) {
 		t.Log("*extensive* activation layer function test passed ...")
 	} else {
 		t.Errorf("its ok u prolly dont need this function anyway")
@@ -106,7 +104,7 @@ func TestReLU(t *testing.T) {
 
 func TestMaxPool(t *testing.T) {
 	A := Initialize(4, 4)
-	(*A.Matrix) = [][]float64{
+	A.data = [][]float64{
 		{1, 2, 3, 4},
 		{2, 1, 4, 5},
 		{3, 4, 0, 0},
@@ -122,7 +120,7 @@ func TestMaxPool(t *testing.T) {
 	if err != nil {
 		t.Errorf("max pooling just got dropped in a pool")
 	}
-	if slicesEqual((*pooled.Matrix), bluePrint) {
+	if slicesEqual(pooled.data, bluePrint) {
 		t.Log("pooling worked a grand total of once ...")
 	} else {
 		t.Errorf("welp someone is gonna crack there skull")
@@ -131,7 +129,7 @@ func TestMaxPool(t *testing.T) {
 
 func TestConvolve(t *testing.T) {
 	A := Initialize(4, 4)
-	(*A.Matrix) = [][]float64{
+	A.data = [][]float64{
 		{1, 2, 3, 4},
 		{2, 1, 4, 5},
 		{3, 4, 0, 0},
@@ -139,7 +137,7 @@ func TestConvolve(t *testing.T) {
 	}
 
 	B := Initialize(2, 2)
-	(*B.Matrix) = [][]float64{
+	B.data = [][]float64{
 		{1, 1},
 		{-1, -1},
 	}
@@ -152,5 +150,5 @@ func TestConvolve(t *testing.T) {
 	t.Log("we dont even have a test for this one so we cant fail ...")
 
 	//ok like i didnt wanna compute this by hand
-	fmt.Println((*convolved.Matrix))
+	fmt.Println(convolved.data)
 }

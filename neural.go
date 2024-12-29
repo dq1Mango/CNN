@@ -127,7 +127,7 @@ func (matrix *Matrix) slice(row, col, height, width int) (*Matrix, error) {
 	slice := Initialize(height, width)
 
 	if row < 0 || col < 0 || row+height > matrix.rows || col+width > matrix.cols {
-		return slice, fmt.Errorf("Index out of range")
+		return slice, fmt.Errorf("index out of range")
 	}
 
 	for i := range height {
@@ -160,6 +160,7 @@ func Flatten(matrix *Matrix) *Matrix {
 	return earth
 }
 
+// Rectified Linear Unit
 func ReLU(matrix *Matrix) {
 	for i := range matrix.rows {
 		for j := range matrix.cols {
@@ -174,7 +175,7 @@ func ReLU(matrix *Matrix) {
 
 func PadRow(matrix *Matrix, padding int) {
 	for range padding {
-		var zeros = make([]float64, matrix.cols, matrix.cols)
+		var zeros = make([]float64, matrix.cols)
 		for j := range matrix.cols {
 			zeros[j] = 0
 		}
@@ -256,6 +257,7 @@ func Dense(input, weights, biases *Matrix) (*Matrix, error) {
 	return output, nil
 }
 
+// note that this is not used for some reason
 func softMax(input *Matrix) *Matrix {
 	total := 0.0
 
@@ -412,7 +414,7 @@ func GetImage(path string) *Matrix {
 	}
 	pixels := Initialize(64, 64)
 	for i := range 64 {
-		pixels.data[i] = make([]float64, 64, 64)
+		pixels.data[i] = make([]float64, 64)
 	}
 
 	//lets hope your data looks exactly like mine
@@ -458,7 +460,7 @@ func GetData(path string) []image {
 
 			pixels := Initialize(64, 64)
 			for i := range 64 {
-				pixels.data[i] = make([]float64, 64, 64)
+				pixels.data[i] = make([]float64, 64)
 			}
 
 			//lets hope your data looks exactly like mine
@@ -516,6 +518,7 @@ func zeroNetwork(network Network) Network {
 	return copyy
 }*/
 
+// note that this is not used
 func sign(n float64) float64 {
 	if n < 0 {
 		return -1
@@ -802,6 +805,7 @@ func (network Network) Train(data []image, batchSize int, learningRate float64) 
 
 }
 
+// note that this is not used
 func hasNaN(matrix *Matrix) bool {
 	for i := range matrix.rows {
 		for j := range matrix.cols {
