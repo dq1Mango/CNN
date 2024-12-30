@@ -147,6 +147,16 @@ func (matrix *Matrix) scale(scaler float64) {
 	}
 }
 
+func (matrix *Matrix) duplicate() *Matrix {
+	copyy := Initialize(matrix.rows, matrix.cols)
+	for i := range matrix.rows {
+		for j := range matrix.cols {
+			copyy.data[i][j] = matrix.data[i][j]
+		}
+	}
+	return copyy
+}
+
 func Flatten(matrix *Matrix) *Matrix {
 
 	earth := Initialize(1, matrix.rows*matrix.cols) //1 AM variable names go hard
@@ -244,15 +254,12 @@ func Convolve(input, kernel *Matrix, stride int) (*Matrix, error) {
 		}
 	}
 
-	//ReLU(output)
-
 	return output, nil
 }
 
 func Dense(input, weights, biases *Matrix) (*Matrix, error) {
 	output, _ := MatrixMultiply(input, weights)
 	output, _ = MatrixAdd(output, biases)
-	//ReLU(output)
 	return output, nil
 }
 
@@ -289,6 +296,12 @@ type Layer struct {
 func CreateReLU() *Layer {
 	return &Layer{
 		Operation: "ReLU",
+	}
+}
+
+func CreateSoftMax() *Layer {
+	return &Layer{
+		Operation: "softMax",
 	}
 }
 
@@ -342,12 +355,6 @@ func CreateDense(inputSize, outputSize int) *Layer {
 	}
 }
 
-func CreateSoftMax() *Layer {
-	return &Layer{
-		Operation: "softMax",
-	}
-}
-
 type Network []Layer
 
 func CreateNetwork() Network {
@@ -377,12 +384,16 @@ func (network Network) Compute(input Matrix) (*Matrix, error) {
 			current = Flatten(current)
 		} else if layer.Operation == "dense" {
 			current, _ = Dense(current, layer.Kernel, layer.Biases)
+		} else if layer.Operation == "ReLU" {
+			ReLU(current)
+		} else if layer.Operation == "softMax" {
+			current = softMax(current)
 		} else {
 			panic("invalid operation key")
 		}
 	}
 
-	total := 0.0
+	/*total := 0.0
 	for _, row := range current.data {
 		for _, value := range row {
 			total += math.Pow(math.E, value)
@@ -395,9 +406,10 @@ func (network Network) Compute(input Matrix) (*Matrix, error) {
 		for j := range current.cols {
 			output.data[i][j] = truncateFloat(math.Pow(math.E, current.data[i][j])/total, 5)
 		}
-	}
+	}*/
 
-	return output, nil
+	return current, nil
+	//return output, nil
 }
 
 type image struct {
@@ -525,6 +537,7 @@ func sign(n float64) float64 {
 }
 
 func backPropogation(network, newNetwork Network, computed []*Matrix, dLoss *Matrix, index int) {
+
 	fmt.Println("cant find it: ", dLoss)
 	nextStep := Initialize(computed[index].rows, computed[index].cols)
 	if network[index].Operation == "dense" {
@@ -574,6 +587,41 @@ func backPropogation(network, newNetwork Network, computed []*Matrix, dLoss *Mat
 						nextStep.data[i*network[index].Step+ii][j*network[index].Step+jj] = dLoss.data[i][j]
 					}
 				}
+			}
+		}
+	} else if network[index].Operation == "ReLU" {
+		for i := range computed[index+1].rows {
+			for j := range computed[index+1].cols {
+				if computed[index+1].data[i][j] == 0 {
+					dLoss.data[i][j] = 0
+				}
+			}
+		}
+	} else if network[index].Operation == "softMax" {
+
+		exponets := Initialize(nextStep.rows, nextStep.cols)
+		total := 0.0
+		for i := range nextStep.rows {
+			for j := range nextStep.cols {
+				exponets.data[i][j] = math.Pow(math.E, computed[index].data[i][j])
+				total += exponets.data[i][j]
+			}
+		}
+		totalSquared := total * total
+
+		for i := range nextStep.rows {
+			for j := range nextStep.cols {
+				for ii := range nextStep.rows {
+					for jj := range nextStep.rows {
+						if jj == ii {
+
+							nextStep.data[i][j] += ((total)*exponets.data[i][j] - (exponets.data[i][j])*(exponets.data[i][j])) / (totalSquared)
+						} else {
+							nextStep.data[i][j] += (total - exponets.data[i][j]*exponets.data[ii][jj]) / totalSquared
+						}
+					}
+				}
+
 			}
 		}
 	} else {
@@ -652,6 +700,14 @@ func MakeUpTestData() *Matrix {
 }*/
 
 func (network Network) Train(data []image, batchSize int, learningRate float64) {
+	/*network[0].Kernel.data = [][]float64{
+		{-1.0, -1.0, -1.0},
+		{2.0, 2.0, 2.0},
+		{-1.0, -1.0, -1.0},
+	}
+	network[2].Kernel.data = [][]float64{
+		{(1.0 / 18)}, {1.0 / 18}, {1.0 / 18}, {1.0 / 18}, {1.0 / 18}, {1.0 / 18}, {1.0 / 18}, {1.0 / 18}, {1.0 / 18}, {1.0 / 18},
+	}*/
 	//														this makes me sad
 	batches := make([][]image, int(math.Ceil(float64(len(data))/float64(batchSize))))
 
@@ -699,13 +755,14 @@ func (network Network) Train(data []image, batchSize int, learningRate float64) 
 					stepByStep[index+1], _ = MaxPool(stepByStep[index], layer.Step)
 				} else if layer.Operation == "convolve" {
 					stepByStep[index+1], _ = Convolve(stepByStep[index], layer.Kernel, layer.Step)
-					//should really generalize this but everybody ues ReLU
-					//ReLU(stepByStep[index+1])
 				} else if layer.Operation == "flatten" {
 					stepByStep[index+1] = Flatten(stepByStep[index])
 				} else if layer.Operation == "dense" {
 					stepByStep[index+1], _ = Dense(stepByStep[index], layer.Kernel, layer.Biases)
-					//ReLU(stepByStep[index+1])
+				} else if layer.Operation == "ReLU" {
+					stepByStep[index+1] = stepByStep[index+1].duplicate()
+				} else if layer.Operation == "softMax" {
+					stepByStep[index+1] = softMax(stepByStep[index])
 				} else {
 					panic("invalid operation key")
 				}
@@ -716,7 +773,7 @@ func (network Network) Train(data []image, batchSize int, learningRate float64) 
 			//(*expected.data) = [][]float64{{0, 0, 0, 0, 0, 0, 0, 0, 0, 0}} //whats this Initialize function good for anyway
 			//(*expected.data)[1][image.label] = 1
 
-			//this part is poorly abstracted but idc
+			//this part is poorly abstracted but idc, ... now it is (less) poorly abstracted
 			/*
 				input := stepByStep[length]
 				total := 0.0
@@ -734,10 +791,9 @@ func (network Network) Train(data []image, batchSize int, learningRate float64) 
 				}
 
 				exponet := math.Pow(math.E, output.data[0][image.label])
-				//dLoss := Initialize(1, 10)
-				//dLoss.data[0] = []float64{0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
 
-				dLoss := Initialize(1, 2)
+				//dLoss := Initialize(1, 2)
+
 				entropySlope := (-1.0 / output.data[0][image.label])
 				totalSquared := total * total
 				for i := range dLoss.cols {
@@ -750,12 +806,11 @@ func (network Network) Train(data []image, batchSize int, learningRate float64) 
 					//if stepByStep[length].data[0][i] == 0 {
 					//	dLoss.data[0][i] = math.Min(dLoss.data[0][i], 0)
 					//}
-				}
-
-				if math.IsNaN(dLoss.data[0][image.label]) {
-					//fmt.Println("continueing")
-					continue
 				}*/
+
+			//now only the loss function is implementeded badly
+			//dLoss := Initialize(1, 10)
+			//dLoss.data[0][image.label] = (-1.0 / stepByStep[length].data[0][image.label])
 
 			for _, step := range stepByStep {
 				for _, row := range step.data {
@@ -770,7 +825,7 @@ func (network Network) Train(data []image, batchSize int, learningRate float64) 
 				fmt.Println(row)
 			}
 			//time.Sleep(time.Second / 10)
-			fmt.Scanln()
+			//fmt.Scanln()
 
 		}
 
@@ -794,7 +849,7 @@ func (network Network) Train(data []image, batchSize int, learningRate float64) 
 		}
 
 		if layer.Operation == "dense" {
-			//fmt.Println(index, ": ", layer.Kernel)
+			fmt.Println(index, ": ", layer.Kernel)
 			fmt.Println(index, ": ", layer.Biases)
 
 		}
