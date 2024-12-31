@@ -285,8 +285,9 @@ func softMax(input *Matrix) *Matrix {
 
 type Layer struct {
 	Operation string
-	Kernel    *Matrix //super consistent pointer usage
 	Step      int
+	Popcorn   int
+	Kernels   []Matrix //super consistent pointer usage
 	Weights   *Matrix
 	Biases    *Matrix
 
@@ -324,7 +325,7 @@ func CreateConvolution(width, height, stride int) *Layer {
 
 	return &Layer{
 		Operation: "convolve",
-		Kernel:    kernel,
+		Kernels:   []Matrix{*kernel},
 		Step:      stride,
 	}
 }
@@ -350,7 +351,7 @@ func CreateDense(inputSize, outputSize int) *Layer {
 
 	return &Layer{
 		Operation: "dense",
-		Kernel:    weights,
+		Weights:   weights,
 		Biases:    biases,
 	}
 }
@@ -379,11 +380,11 @@ func (network Network) Compute(input Matrix) (*Matrix, error) {
 		if layer.Operation == "maxPool" {
 			current, _ = MaxPool(current, layer.Step)
 		} else if layer.Operation == "convolve" {
-			current, _ = Convolve(current, layer.Kernel, layer.Step)
+			current, _ = Convolve(current, layer.Kernels, layer.Step)
 		} else if layer.Operation == "flatten" {
 			current = Flatten(current)
 		} else if layer.Operation == "dense" {
-			current, _ = Dense(current, layer.Kernel, layer.Biases)
+			current, _ = Dense(current, layer.Weights, layer.Biases)
 		} else if layer.Operation == "ReLU" {
 			ReLU(current)
 		} else if layer.Operation == "softMax" {
@@ -501,11 +502,14 @@ func zeroNetwork(network Network) Network {
 
 	for index, layer := range network {
 		if layer.Operation == "convolve" {
-			copyy.Add(CreateConvolution(layer.Kernel.rows, layer.Kernel.cols, layer.Step))
-			copyy[index].Kernel = Initialize(layer.Kernel.rows, layer.Kernel.cols)
+			copyy.Add(CreateConvolution(layer.Kernels[0].rows, layer.Kernels[0].cols, layer.Step))
+			for kernel := range layer.Kernels {
+
+				copyy[index].Kernels[kernel] = (*Initialize(layer.Kernels[0].rows, layer.Kernels[0].cols))
+			}
 		} else if layer.Operation == "dense" {
-			copyy.Add(CreateDense(layer.Kernel.rows, layer.Kernel.cols))
-			copyy[index].Kernel = Initialize(layer.Kernel.rows, layer.Kernel.cols)
+			copyy.Add(CreateDense(layer.Weights.rows, layer.Weights.cols))
+			copyy[index].Weights = Initialize(layer.Weights.rows, layer.Weights.cols)
 		} else if layer.Operation == "maxPool" {
 			copyy.Add(CreateMaxPool(layer.Step))
 		} else if layer.Operation == "flatten" {
@@ -528,31 +532,27 @@ func zeroNetwork(network Network) Network {
 	return copyy
 }*/
 
-func sign(n float64) float64 {
-	if n < 0 {
-		return -1
-	} else {
-		return 1
-	}
-}
-
-func backPropogation(network, newNetwork Network, computed []*Matrix, dLoss *Matrix, index int) {
+func backPropogation(network, newNetwork Network, computed [][]*Matrix, dLoss []Matrix, index int) {
 
 	fmt.Println("cant find it: ", dLoss)
-	nextStep := Initialize(computed[index].rows, computed[index].cols)
+	nextStep := make([]Matrix, network[index].Popcorn)
+	for depth := range nextStep {
+
+		nextStep[depth] = (*Initialize(computed[index][0].rows, computed[index][0].cols))
+	}
 	if network[index].Operation == "dense" {
-		for i, node := range dLoss.data[0] {
-			for weight := range network[index].Kernel.rows {
+		for i, node := range dLoss[0].data[0] {
+			for weight := range network[index].Weights.rows {
 				//if computed[index].data[0][weight] == 0 {
 
 				//	nextStep.data[0][weight] += (network[index].Kernel.data[weight][i] * math.Min(node, 0))
 				//} else {
 
-				nextStep.data[0][weight] += (network[index].Kernel.data[weight][i] * node)
+				nextStep[0].data[0][weight] += (network[index].Weights.data[weight][i] * node)
 				//}
 				//fmt.Println("before: ", newNetwork[index].Kernel.data[weight][i])
 				//fmt.Println((computed[index].data[0][weight] * node))
-				newNetwork[index].Kernel.data[weight][i] -= (computed[index].data[0][weight] * node)
+				newNetwork[index].Weights.data[weight][i] -= (computed[index][0].data[0][weight] * node)
 				//fmt.Println("after: ", newNetwork[index].Kernel.data[weight][i])
 			}
 			newNetwork[index].Biases.data[0][i] -= node
@@ -561,67 +561,87 @@ func backPropogation(network, newNetwork Network, computed []*Matrix, dLoss *Mat
 		//if index == 2 {
 		//	fmt.Println("cant find it: ", dLoss)
 		//}
-		kernel := network[index].Kernel
-		for ii := 0; ii <= computed[index].rows-kernel.rows; ii += network[index].Step {
-			for jj := 0; jj <= computed[index].cols-kernel.cols; jj += network[index].Step {
-				for i := range kernel.rows {
-					for j := range kernel.cols {
-						nextStep.data[ii+i][jj+j] += kernel.data[i][j] * dLoss.data[ii/network[index].Step][jj/network[index].Step]
-						//maybe this will work ¯\_(ツ)_/¯ who knows really
-						newNetwork[index].Kernel.data[i][j] -= computed[index].data[ii+i][jj+j] * dLoss.data[ii/network[index].Step][jj/network[index].Step]
+
+		//im running out of names for index variables
+		for place, kernel := range network[index].Kernels { //yeah yeah ik i couuuuuuld combine these two loops into one but we will see if it actually has any performance impact
+			for _, affected := range dLoss[place*network[index].Popcorn : (place+1)*network[index].Popcorn] {
+				for ii := 0; ii <= computed[index][0].rows-kernel.rows; ii += network[index].Step {
+					for jj := 0; jj <= computed[index][0].cols-kernel.cols; jj += network[index].Step {
+						for i := range kernel.rows {
+							for j := range kernel.cols {
+								nextStep[place].data[ii+i][jj+j] += kernel.data[i][j] * affected.data[ii/network[index].Step][jj/network[index].Step]
+								//maybe this will work ¯\_(ツ)_/¯ who knows really
+								newNetwork[index].Kernels[place].data[i][j] -= computed[index][place].data[ii+i][jj+j] * affected.data[ii/network[index].Step][jj/network[index].Step]
+							}
+						}
+						//(*output.data)[i/stride][j/stride] = dot
 					}
 				}
-				//(*output.data)[i/stride][j/stride] = dot
 			}
 		}
 	} else if network[index].Operation == "flatten" {
-		for index, value := range dLoss.data[0] {
-			nextStep.data[index/nextStep.rows][index%nextStep.cols] = value
+		for index, value := range dLoss[0].data[0] {
+			nextStep[index%(nextStep[0].rows*nextStep[0].cols)].data[index/nextStep[0].rows][index%nextStep[0].cols] = value
 		}
 	} else if network[index].Operation == "maxPool" {
 		//not quite sure if this is actually what you are supposed to do but i can only think of one other way to do this so were gonna try it like this
-		for i := range dLoss.rows {
-			for j := range dLoss.cols {
-				for ii := range network[index].Step {
-					for jj := range network[index].Step {
-						nextStep.data[i*network[index].Step+ii][j*network[index].Step+jj] = dLoss.data[i][j]
+		for whereWeAre, value := range dLoss {
+
+			for i := range value.cols {
+				for j := range value.cols {
+					for ii := range network[index].Step {
+						for jj := range network[index].Step {
+							nextStep[whereWeAre].data[i*network[index].Step+ii][j*network[index].Step+jj] = value.data[i][j]
+						}
 					}
 				}
 			}
 		}
 	} else if network[index].Operation == "ReLU" {
-		for i := range computed[index+1].rows {
-			for j := range computed[index+1].cols {
-				if computed[index+1].data[i][j] == 0 {
-					dLoss.data[i][j] = 0
+		for outerIndex, matrix := range dLoss {
+			for i := range computed[index+1][0].rows {
+				for j := range computed[index+1][0].cols {
+					if computed[index+1][outerIndex].data[i][j] == 0 {
+						nextStep[outerIndex].data[i][j] = 0
+					} else {
+						nextStep[outerIndex].data[i][j] = matrix.data[i][j]
+
+					}
 				}
 			}
 		}
 	} else if network[index].Operation == "softMax" {
 
-		exponets := Initialize(nextStep.rows, nextStep.cols)
+		exponets := make([]Matrix, network[index].Popcorn)
+		for outerIndex := range exponets {
+			exponets[outerIndex] = (*Initialize(nextStep[outerIndex].rows, nextStep[outerIndex].cols))
+		}
 		total := 0.0
-		for i := range nextStep.rows {
-			for j := range nextStep.cols {
-				exponets.data[i][j] = math.Pow(math.E, computed[index].data[i][j])
-				total += exponets.data[i][j]
+		for outerIndex, matrix := range computed[index] {
+
+			for i := range matrix.rows {
+				for j := range matrix.cols {
+					exponets[outerIndex].data[i][j] = math.Pow(math.E, matrix.data[i][j])
+				}
 			}
+			total += Sum(&exponets[outerIndex])
 		}
 		totalSquared := total * total
+		for outerIndex, matrix := range exponets {
+			for i := range matrix.rows {
+				for j := range matrix.cols {
+					for ii := range matrix.rows {
+						for jj := range matrix.rows {
+							if jj == ii {
 
-		for i := range nextStep.rows {
-			for j := range nextStep.cols {
-				for ii := range nextStep.rows {
-					for jj := range nextStep.rows {
-						if jj == ii {
-
-							nextStep.data[i][j] += ((total)*exponets.data[i][j] - (exponets.data[i][j])*(exponets.data[i][j])) / (totalSquared)
-						} else {
-							nextStep.data[i][j] += (total - exponets.data[i][j]*exponets.data[ii][jj]) / totalSquared
+								nextStep[outerIndex].data[i][j] += ((total)*matrix.data[i][j] - (matrix.data[i][j])*(matrix.data[i][j])) / (totalSquared)
+							} else {
+								nextStep[outerIndex].data[i][j] += (total - matrix.data[i][j]*matrix.data[ii][jj]) / totalSquared
+							}
 						}
 					}
-				}
 
+				}
 			}
 		}
 	} else {
