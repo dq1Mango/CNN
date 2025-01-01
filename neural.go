@@ -358,18 +358,22 @@ func CreateMaxPool(size int) *Layer {
 }
 
 func CreateConvolution(width, height, stride, filters int) *Layer {
-	kernel := Initialize(height, width)
-	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+	kernels := make([]Matrix, filters)
+	for f := range filters {
+		kernel := Initialize(height, width)
+		r := rand.New(rand.NewSource(time.Now().UnixNano()))
 
-	for i := range height {
-		for j := range width {
-			kernel.data[i][j] = r.NormFloat64()
+		for i := range height {
+			for j := range width {
+				kernel.data[i][j] = r.NormFloat64()
+			}
 		}
+		kernels[f] = *kernel
 	}
 
 	return &Layer{
 		Operation: "convolve",
-		Kernels:   []Matrix{*kernel},
+		Kernels:   kernels,
 		Step:      stride,
 		Popcorn:   filters,
 	}
@@ -579,7 +583,7 @@ func zeroNetwork(network Network) Network {
 
 func backPropogation(network, newNetwork Network, computed [][]Matrix, dLoss []Matrix, index int) {
 
-	fmt.Println("cant find it: ", dLoss)
+	//fmt.Println("cant find it: ", dLoss)
 	nextStep := make([]Matrix, len(computed[index]))
 	for depth := range nextStep {
 
@@ -609,11 +613,12 @@ func backPropogation(network, newNetwork Network, computed [][]Matrix, dLoss []M
 
 		//im running out of names for index variables
 		for place, kernel := range network[index].Kernels { //yeah yeah ik i couuuuuuld combine these two loops into one but we will see if it actually has any performance impact
-			for _, affected := range dLoss[place*network[index].Popcorn : (place+1)*network[index].Popcorn] {
+			for _, affected := range dLoss[place*len(computed[index]) : (place+1)*len(computed[index])] {
 				for ii := 0; ii <= computed[index][0].rows-kernel.rows; ii += network[index].Step {
 					for jj := 0; jj <= computed[index][0].cols-kernel.cols; jj += network[index].Step {
 						for i := range kernel.rows {
 							for j := range kernel.cols {
+								fmt.Println(place)
 								nextStep[place].data[ii+i][jj+j] += kernel.data[i][j] * affected.data[ii/network[index].Step][jj/network[index].Step]
 								//maybe this will work ¯\_(ツ)_/¯ who knows really
 								newNetwork[index].Kernels[place].data[i][j] -= computed[index][place].data[ii+i][jj+j] * affected.data[ii/network[index].Step][jj/network[index].Step]
@@ -624,9 +629,10 @@ func backPropogation(network, newNetwork Network, computed [][]Matrix, dLoss []M
 				}
 			}
 		}
+
 	} else if network[index].Operation == "flatten" {
 		for index, value := range dLoss[0].data[0] {
-			nextStep[index/(nextStep[0].rows*nextStep[0].cols)].data[index/nextStep[0].rows][index%nextStep[0].cols] = value
+			nextStep[index/(nextStep[0].rows*nextStep[0].cols)].data[index/nextStep[0].rows%nextStep[0].cols][index%nextStep[0].cols] = value
 		}
 	} else if network[index].Operation == "maxPool" {
 		//not quite sure if this is actually what you are supposed to do but i can only think of one other way to do this so were gonna try it like this
@@ -750,8 +756,8 @@ func MakeUpTestData() []Matrix {
 			barelyMatrix := Initialize(1, 1)
 			barelyMatrix.data[0][0] = float64(i)
 			data[i*100+j] = image{
-				data:  barelyMatrix,
-				label: 2*i + 10,
+				content: barelyMatrix,
+				label:   2*i + 10,
 			}
 		}
 	}
@@ -870,7 +876,7 @@ func (network Network) Train(data []image, batchSize int, learningRate float64) 
 			dLoss[0] = (*Initialize(1, 1))
 			dLoss[0].data[0][0] = 2 * (stepByStep[length][0].data[0][0] - float64(image.label))
 			backPropogation(network, changes, stepByStep, dLoss, length-1)
-			fmt.Println("things we want to change:")
+			//fmt.Println("things we want to change:")
 
 			//time.Sleep(time.Second / 10)
 			//fmt.Scanln()
@@ -885,27 +891,29 @@ func (network Network) Train(data []image, batchSize int, learningRate float64) 
 					network[index].Kernels[i] = (*MatrixAdd(&layer.Kernels[i], &kernel))
 
 				}
-				if layer.Operation == "dense" {
-					changes[index].Weights.scale(learningRate)
-					network[index].Weights = MatrixAdd(layer.Weights, changes[index].Weights)
+			}
+			if layer.Operation == "dense" {
 
-					changes[index].Biases.scale(learningRate * 50)
-					network[index].Biases = MatrixAdd(layer.Biases, changes[index].Biases)
-				}
+				changes[index].Weights.scale(learningRate)
+				network[index].Weights = MatrixAdd(layer.Weights, changes[index].Weights)
+
+				changes[index].Biases.scale(learningRate * 50)
+				network[index].Biases = MatrixAdd(layer.Biases, changes[index].Biases)
 			}
 		}
+
 		//fmt.Println("new network: ", network[0].Kernel, network[0].Biases)
-	}
-	fmt.Println()
-	for index, layer := range network {
-		if layer.Operation == "convolve" { //|| layer.Operation == "dense" {
-			fmt.Println(index, ": ", layer.Kernels)
-		}
+		fmt.Println()
+		for index, layer := range network {
+			if layer.Operation == "convolve" { //|| layer.Operation == "dense" {
+				fmt.Println(index, ": ", layer.Kernels)
+			}
 
-		if layer.Operation == "dense" {
-			fmt.Println(index, ": ", layer.Weights)
-			fmt.Println(index, ": ", layer.Biases)
+			if layer.Operation == "dense" {
+				fmt.Println(index, ": ", layer.Weights)
+				fmt.Println(index, ": ", layer.Biases)
 
+			}
 		}
 	}
 
