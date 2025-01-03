@@ -180,7 +180,7 @@ func ReLU(matricies []Matrix) []Matrix {
 				/*if matrix.data[i][j] < 0 {
 					matrix.data[i][j] *= 0.05
 				}*/
-				matricies[index].data[i][j] = math.Max(0, matrix.data[i][j])
+				activated[index].data[i][j] = math.Max(0, matrix.data[i][j])
 			}
 		}
 	}
@@ -304,8 +304,7 @@ func softMax(input []Matrix) []Matrix {
 		output[index] = *Initialize(matrix.rows, matrix.cols)
 		for i := range matrix.rows {
 			for j := range matrix.cols {
-				output[index].data[i][j] = matrix.data[i][j] / total
-				total += math.Pow(math.E, matrix.data[i][j])
+				output[index].data[i][j] = math.Pow(math.E, matrix.data[i][j]) / total
 			}
 		}
 	}
@@ -365,7 +364,7 @@ func CreateConvolution(width, height, stride, filters int) *Layer {
 
 		for i := range height {
 			for j := range width {
-				kernel.data[i][j] = r.NormFloat64()
+				kernel.data[i][j] = r.Float64() - 0.5 //its not skuffed idk what u mean
 			}
 		}
 		kernels[f] = *kernel
@@ -393,8 +392,8 @@ func CreateDense(inputSize, outputSize int) *Layer {
 
 	for i := range inputSize {
 		for j := range outputSize {
-			weights.data[i][j] = r.NormFloat64()
-			biases.data[0][j] = r.NormFloat64()
+			weights.data[i][j] = r.Float64() - 0.5
+			biases.data[0][j] = r.Float64() - 0.5
 		}
 	}
 
@@ -435,7 +434,7 @@ func (network Network) Compute(input Matrix) ([]Matrix, error) {
 		} else if layer.Operation == "dense" {
 			current, _ = DenseLayer(current, layer)
 		} else if layer.Operation == "ReLU" {
-			ReLU(current)
+			current = ReLU(current)
 		} else if layer.Operation == "softMax" {
 			current = softMax(current)
 		} else {
@@ -443,23 +442,18 @@ func (network Network) Compute(input Matrix) ([]Matrix, error) {
 		}
 	}
 
-	/*total := 0.0
-	for _, row := range current.data {
-		for _, value := range row {
-			total += math.Pow(math.E, value)
+	almost := current[0]
+
+	output := Initialize(almost.rows, almost.cols)
+
+	for i := range almost.rows {
+		for j := range almost.cols {
+			output.data[i][j] = truncateFloat(almost.data[i][j], 5)
 		}
 	}
 
-	output := Initialize(current.rows, current.cols)
-
-	for i := range current.rows {
-		for j := range current.cols {
-			output.data[i][j] = truncateFloat(math.Pow(math.E, current.data[i][j])/total, 5)
-		}
-	}*/
-
-	return current, nil
-	//return output, nil
+	//return current, nil
+	return []Matrix{*output}, nil
 }
 
 type image struct {
@@ -563,6 +557,10 @@ func zeroNetwork(network Network) Network {
 			copyy.Add(CreateMaxPool(layer.Step))
 		} else if layer.Operation == "flatten" {
 			copyy.Add(CreateFlatten())
+		} else if layer.Operation == "ReLU" {
+			copyy.Add(CreateReLU())
+		} else if layer.Operation == "softMax" {
+			copyy.Add(CreateSoftMax())
 		}
 	}
 
@@ -582,7 +580,6 @@ func zeroNetwork(network Network) Network {
 }*/
 
 func backPropogation(network, newNetwork Network, computed [][]Matrix, dLoss []Matrix, index int) {
-
 	//fmt.Println("cant find it: ", dLoss)
 	nextStep := make([]Matrix, len(computed[index]))
 	for depth := range nextStep {
@@ -613,15 +610,20 @@ func backPropogation(network, newNetwork Network, computed [][]Matrix, dLoss []M
 
 		//im running out of names for index variables
 		for place, kernel := range network[index].Kernels { //yeah yeah ik i couuuuuuld combine these two loops into one but we will see if it actually has any performance impact
-			for _, affected := range dLoss[place*len(computed[index]) : (place+1)*len(computed[index])] {
+			for aff, affected := range dLoss[place*len(computed[index]) : (place+1)*len(computed[index])] {
+				dontDivideByZero := 0
+				if place == 0 {
+					dontDivideByZero = aff
+				} else {
+					dontDivideByZero = aff % place
+				}
 				for ii := 0; ii <= computed[index][0].rows-kernel.rows; ii += network[index].Step {
 					for jj := 0; jj <= computed[index][0].cols-kernel.cols; jj += network[index].Step {
 						for i := range kernel.rows {
 							for j := range kernel.cols {
-								fmt.Println(place)
-								nextStep[place].data[ii+i][jj+j] += kernel.data[i][j] * affected.data[ii/network[index].Step][jj/network[index].Step]
+								nextStep[dontDivideByZero].data[ii+i][jj+j] += kernel.data[i][j] * affected.data[ii/network[index].Step][jj/network[index].Step]
 								//maybe this will work ¯\_(ツ)_/¯ who knows really
-								newNetwork[index].Kernels[place].data[i][j] -= computed[index][place].data[ii+i][jj+j] * affected.data[ii/network[index].Step][jj/network[index].Step]
+								newNetwork[index].Kernels[place].data[i][j] -= computed[index][dontDivideByZero].data[ii+i][jj+j] * affected.data[ii/network[index].Step][jj/network[index].Step]
 							}
 						}
 						//(*output.data)[i/stride][j/stride] = dot
@@ -663,7 +665,7 @@ func backPropogation(network, newNetwork Network, computed [][]Matrix, dLoss []M
 		}
 	} else if network[index].Operation == "softMax" {
 
-		exponets := make([]Matrix, network[index].Popcorn)
+		exponets := make([]Matrix, len(computed[index]))
 		for outerIndex := range exponets {
 			exponets[outerIndex] = (*Initialize(nextStep[outerIndex].rows, nextStep[outerIndex].cols))
 		}
@@ -771,6 +773,8 @@ func MakeUpTestData() *Matrix {
 }*/
 
 func (network Network) Train(data []image, batchSize int, learningRate float64) {
+	fmt.Println("we ran", len(data))
+
 	/*network[0].Kernel.data = [][]float64{
 		{-1.0, -1.0, -1.0},
 		{2.0, 2.0, 2.0},
@@ -801,7 +805,6 @@ func (network Network) Train(data []image, batchSize int, learningRate float64) 
 			break
 		}
 
-		//fmt.Println("current network")
 		changes := zeroNetwork(network)
 
 		for _, image := range batch {
@@ -810,6 +813,7 @@ func (network Network) Train(data []image, batchSize int, learningRate float64) 
 			stepByStep[0] = []Matrix{*image.content}
 
 			for index, layer := range network {
+
 				//fmt.Println(stepByStep[index].rows, stepByStep[index].cols)
 				//i probably should use annonomous funtions
 				if layer.Operation == "maxPool" {
@@ -821,7 +825,7 @@ func (network Network) Train(data []image, batchSize int, learningRate float64) 
 				} else if layer.Operation == "dense" {
 					stepByStep[index+1], _ = DenseLayer(stepByStep[index], layer)
 				} else if layer.Operation == "ReLU" {
-					stepByStep[index+1] = ReLU(stepByStep[index+1])
+					stepByStep[index+1] = ReLU(stepByStep[index])
 				} else if layer.Operation == "softMax" {
 					stepByStep[index+1] = softMax(stepByStep[index])
 				} else {
@@ -853,9 +857,10 @@ func (network Network) Train(data []image, batchSize int, learningRate float64) 
 
 				exponet := math.Pow(math.E, output.data[0][image.label])
 
-				//dLoss := Initialize(1, 2)
 
-				entropySlope := (-1.0 / output.data[0][image.label])
+				//dLoss := Initialize(1, 2)*/
+
+			/*
 				totalSquared := total * total
 				for i := range dLoss.cols {
 					if i == image.label {
@@ -872,11 +877,15 @@ func (network Network) Train(data []image, batchSize int, learningRate float64) 
 			//now only the loss function is implementeded badly
 			//dLoss := Initialize(1, 10)
 			//dLoss.data[0][image.label] = (-1.0 / stepByStep[length].data[0][image.label])
-			dLoss := make([]Matrix, 1)
+			/*dLoss := make([]Matrix, 1)
 			dLoss[0] = (*Initialize(1, 1))
-			dLoss[0].data[0][0] = 2 * (stepByStep[length][0].data[0][0] - float64(image.label))
+			dLoss[0].data[0][0] = 2 * (stepByStep[length][0].data[0][0] - float64(image.label))*/
+			dLoss := make([]Matrix, 1)
+			dLoss[0] = *Initialize(1, stepByStep[length][0].cols)
+
+			entropySlope := (-1.0 / stepByStep[length][0].data[0][image.label])
+			dLoss[0].data[0][image.label] = entropySlope
 			backPropogation(network, changes, stepByStep, dLoss, length-1)
-			//fmt.Println("things we want to change:")
 
 			//time.Sleep(time.Second / 10)
 			//fmt.Scanln()
@@ -902,18 +911,17 @@ func (network Network) Train(data []image, batchSize int, learningRate float64) 
 			}
 		}
 
-		//fmt.Println("new network: ", network[0].Kernel, network[0].Biases)
-		fmt.Println()
-		for index, layer := range network {
-			if layer.Operation == "convolve" { //|| layer.Operation == "dense" {
-				fmt.Println(index, ": ", layer.Kernels)
-			}
+	}
+	fmt.Println()
+	for index, layer := range network {
+		if layer.Operation == "convolve" { //|| layer.Operation == "dense" {
+			fmt.Println(index, ": ", layer.Kernels)
+		}
 
-			if layer.Operation == "dense" {
-				fmt.Println(index, ": ", layer.Weights)
-				fmt.Println(index, ": ", layer.Biases)
+		if layer.Operation == "dense" {
+			fmt.Println(index, ": ", layer.Weights)
+			fmt.Println(index, ": ", layer.Biases)
 
-			}
 		}
 	}
 
