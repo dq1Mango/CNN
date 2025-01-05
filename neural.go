@@ -172,7 +172,6 @@ func Flatten(matricies []Matrix) *Matrix {
 	return earth
 }
 
-<<<<<<< HEAD
 func ReLU(matricies []Matrix) []Matrix {
 	activated := make([]Matrix, len(matricies))
 	for index, matrix := range matricies {
@@ -185,8 +184,6 @@ func ReLU(matricies []Matrix) []Matrix {
 				}*/
 				activated[index].data[i][j] = math.Max(0, matrix.data[i][j])
 			}
-=======
->>>>>>> origin/main
 		}
 	}
 	return activated
@@ -289,13 +286,10 @@ func Dense(input, weights, biases *Matrix) (*Matrix, error) {
 	return output, nil
 }
 
-<<<<<<< HEAD
 func DenseLayer(input []Matrix, dense Layer) ([]Matrix, error) {
 	output, err := Dense(&input[0], dense.Weights, dense.Biases)
 	return []Matrix{*output}, err
 }
-=======
->>>>>>> origin/main
 
 func softMax(input []Matrix) []Matrix {
 	output := make([]Matrix, len(input))
@@ -522,12 +516,9 @@ func GetData(trainPath, labelPath string, size int) []image {
 		if err != nil {
 			fmt.Println(err)
 		}
-<<<<<<< HEAD
 		_, err = label.ReadByte()
 		if err != nil {
 			fmt.Println(err)
-=======
->>>>>>> origin/main
 		}
 	}
 
@@ -628,13 +619,10 @@ func zeroNetwork(network Network) Network {
 	return copyy
 }*/
 
-<<<<<<< HEAD
 func backPropogation(network, newNetwork Network, computed [][]Matrix, dLoss []Matrix, index int) {
 	//fmt.Println("cant find it: ", dLoss)
 	nextStep := make([]Matrix, len(computed[index]))
 	for depth := range nextStep {
-=======
->>>>>>> origin/main
 
 		nextStep[depth] = (*Initialize(computed[index][0].rows, computed[index][0].cols))
 	}
