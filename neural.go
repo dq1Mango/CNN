@@ -1,8 +1,10 @@
 package neural
 
 import (
+	"bufio"
+	"encoding/binary"
 	"fmt"
-	"log"
+	"io"
 	"math"
 	"math/rand"
 	"os"
@@ -457,8 +459,8 @@ func (network Network) Compute(input Matrix) ([]Matrix, error) {
 }
 
 type image struct {
-	content *Matrix
-	label   int
+	Content *Matrix
+	Label   int
 }
 
 func GetImage(path string) *Matrix {
@@ -484,58 +486,96 @@ func GetImage(path string) *Matrix {
 	return pixels
 }
 
-// this serves little purpose beyond compartmenalization
-func GetData(path string) []image {
-	data := make([]image, 0, 770)
+// aka "normalize"
+func round(b byte) float64 {
+	if b < 128 {
+		return 0
+	} else {
+		return 1
+	}
+}
 
-	directories, err := os.ReadDir(path)
-
+// this serves little purpose beyond compartmenalization -- except now it servers as an idx parse, which im sure is all anyone really wants
+func GetData(trainPath, labelPath string, size int) []image {
+	data := make([]image, size)
+	training, err := os.Open(trainPath)
 	if err != nil {
-		fmt.Println("could not get ls to work")
-		panic("could not get ls to work")
+		panic(err)
+	}
+	labeling, err := os.Open(labelPath)
+	if err != nil {
+		panic(err)
 	}
 
-	//more like "Get(very specifically sorted)Data"
-	for _, dir := range directories {
+	train := bufio.NewReader(training)
+	label := bufio.NewReader(labeling)
 
-		files, err := os.ReadDir(path + dir.Name() + "/")
-
+	//buffers through the magic number
+	for range 3 {
+		_, err := train.ReadByte()
 		if err != nil {
-			fmt.Println("could not get ls to work for the dirs", path)
-			panic("could not get ls to work for the dirs")
+			fmt.Println(err)
 		}
-
-		for _, file := range files {
-			contents, err := os.ReadFile(path + dir.Name() + "/" + file.Name())
-
-			if err != nil { //wow i handle errors like 3 different ways if only i cared about errors
-				log.Fatal(err)
-			}
-
-			pixels := Initialize(64, 64)
-			for i := range 64 {
-				pixels.data[i] = make([]float64, 64, 64)
-			}
-
-			//lets hope your data looks exactly like mine
-			for i := 0; i < int(math.Pow(64, 2)); i++ {
-				pixel := string(contents[i*2])
-				pixels.data[i/64][i%64], err = strconv.ParseFloat(pixel, 64)
-
-				if err != nil {
-					fmt.Println("could not find \"float\"")
-				}
-			}
-
-			//converted, _ := strconv.Atoi(file.Name())
-			label, _ := strconv.Atoi(dir.Name())
-			data = append(data, image{
-				content: pixels,
-				label:   label,
-			})
+		_, err = label.ReadByte()
+		if err != nil {
+			fmt.Println(err)
 		}
 	}
 
+	//dimensions of labels better be 1
+	dimensions, err := train.ReadByte()
+	_, err = label.ReadByte()
+
+	buf := make([]byte, 4)
+	_, err = io.ReadFull(train, buf)
+
+	otherBuf := make([]byte, 4)
+	_, err = io.ReadFull(label, otherBuf)
+
+	fmt.Println(buf, otherBuf)
+	length := binary.BigEndian.Uint32(buf)
+
+	if length != binary.BigEndian.Uint32(otherBuf) {
+		fmt.Errorf("training and label data have mismatched sizes")
+	}
+
+	rows, cols := 28, 28 //what a greate idx parser
+
+	for range dimensions - 1 {
+		buf := make([]byte, 4)
+		_, err = io.ReadFull(train, buf)
+		fmt.Println(binary.BigEndian.Uint32(buf))
+	}
+
+	for index := range size {
+
+		if index >= size {
+			break
+		}
+
+		instance := Initialize(rows, cols)
+		for i := range rows {
+			for j := range cols {
+				pixel, err := train.ReadByte()
+				if err != nil {
+					fmt.Println(err)
+				}
+
+				instance.data[i][j] = round(pixel)
+			}
+		}
+
+		label, err := label.ReadByte()
+		if err != nil {
+			fmt.Println(err)
+		}
+
+		data[index] = image{
+			Content: instance,
+			Label:   int(label),
+		}
+
+	}
 	return data
 
 }
@@ -719,8 +759,8 @@ func MakeUpData() []image {
 
 				}
 				data[i+3*flip+j] = image{
-					content: example,
-					label:   flip,
+					Content: example,
+					Label:   flip,
 				}
 			}
 
@@ -772,6 +812,133 @@ func MakeUpTestData() *Matrix {
 	return test
 }*/
 
+func worker(network Network, length int, input chan image, propogated chan Network) {
+	for {
+		instance := <-input
+		//first we have to compute what the network would evaluate each layer to be in its current state
+		stepByStep := make([][]Matrix, length+1)
+		stepByStep[0] = []Matrix{*instance.Content}
+
+		for index, layer := range network {
+
+			//fmt.Println(stepByStep[index].rows, stepByStep[index].cols)
+			//i probably should use annonomous funtions
+			if layer.Operation == "maxPool" {
+				stepByStep[index+1], _ = MaxPool(stepByStep[index], layer.Step)
+			} else if layer.Operation == "convolve" {
+				stepByStep[index+1] = ConvolveLayer(stepByStep[index], layer)
+			} else if layer.Operation == "flatten" {
+				stepByStep[index+1] = []Matrix{*Flatten(stepByStep[index])}
+			} else if layer.Operation == "dense" {
+				stepByStep[index+1], _ = DenseLayer(stepByStep[index], layer)
+			} else if layer.Operation == "ReLU" {
+				stepByStep[index+1] = ReLU(stepByStep[index])
+			} else if layer.Operation == "softMax" {
+				stepByStep[index+1] = softMax(stepByStep[index])
+			} else {
+				panic("invalid operation key")
+			}
+		}
+
+		//we are gonna do some (more) cheating i think
+		//expected := Initialize(1, 10)
+		//(*expected.data) = [][]float64{{0, 0, 0, 0, 0, 0, 0, 0, 0, 0}} //whats this Initialize function good for anyway
+		//(*expected.data)[1][image.label] = 1
+
+		//this part is poorly abstracted but idc, ... now it is (less) poorly abstracted
+		/*
+			input := stepByStep[length]
+			total := 0.0
+			for _, row := range input.data {
+				for _, value := range row {
+					total += math.Pow(math.E, value)
+				}
+			}
+
+			output := Initialize(input.rows, input.cols)
+			for i := range (*input).rows {
+				for j := range (*input).cols {
+					output.data[i][j] = math.Pow(math.E, input.data[i][j]) / total
+				}
+			}
+
+			exponet := math.Pow(math.E, output.data[0][image.label])
+
+
+			//dLoss := Initialize(1, 2)*/
+
+		/*
+			totalSquared := total * total
+			for i := range dLoss.cols {
+				if i == image.label {
+
+					dLoss.data[0][i] = entropySlope * ((total)*exponet - (exponet)*(exponet)) / (totalSquared)
+				} else {
+					dLoss.data[0][i] = entropySlope * -1 * exponet / totalSquared
+				}
+				//if stepByStep[length].data[0][i] == 0 {
+				//	dLoss.data[0][i] = math.Min(dLoss.data[0][i], 0)
+				//}
+			}*/
+
+		//now only the loss function is implementeded badly
+		//dLoss := Initialize(1, 10)
+		//dLoss.data[0][image.label] = (-1.0 / stepByStep[length].data[0][image.label])
+		/*dLoss := make([]Matrix, 1)
+		dLoss[0] = (*Initialize(1, 1))
+		dLoss[0].data[0][0] = 2 * (stepByStep[length][0].data[0][0] - float64(image.label))*/
+		dLoss := make([]Matrix, 1)
+		dLoss[0] = *Initialize(1, stepByStep[length][0].cols)
+
+		entropySlope := (-1.0 / stepByStep[length][0].data[0][instance.Label])
+		dLoss[0].data[0][instance.Label] = entropySlope
+
+		changes := zeroNetwork(network)
+		backPropogation(network, changes, stepByStep, dLoss, length-1)
+
+		propogated <- changes
+	}
+}
+
+func addNetworks(origin, changes Network, learningRate float64) Network {
+	result := zeroNetwork(origin)
+
+	//too lazy to compare slices lol
+	/*if result != zeroNetwork(net2) {
+		panic("networks of different dimensions, unadable")
+	}*/
+
+	for index, layer := range origin {
+		if layer.Operation == "convolve" {
+			for i, kernel := range origin[index].Kernels {
+				kernel.scale(learningRate)
+				origin[index].Kernels[i] = (*MatrixAdd(&layer.Kernels[i], &kernel))
+
+			}
+		}
+		if layer.Operation == "dense" {
+
+			changes[index].Weights.scale(learningRate)
+			origin[index].Weights = MatrixAdd(layer.Weights, changes[index].Weights)
+
+			changes[index].Biases.scale(learningRate * 50)
+			origin[index].Biases = MatrixAdd(layer.Biases, changes[index].Biases)
+		}
+	}
+
+	return result
+}
+
+func collector(result Network, propogated chan Network, size int, learningRate float64) {
+
+	for range size {
+		change := <-propogated
+		result = addNetworks(result, change, learningRate)
+	}
+
+	return
+}
+
 func (network Network) Train(data []image, batchSize int, learningRate float64) {
 	fmt.Println("we ran", len(data))
 
@@ -806,110 +973,23 @@ func (network Network) Train(data []image, batchSize int, learningRate float64) 
 		}
 
 		changes := zeroNetwork(network)
+		input := make(chan image)
+		propogated := make(chan Network)
 
+		go collector(changes, propogated, len(data), learningRate)
+
+		threads := 10
+		for range threads {
+			go worker(network, length, input, propogated)
+		}
 		for _, image := range batch {
-			//first we have to compute what the network would evaluate each layer to be in its current state
-			stepByStep := make([][]Matrix, length+1)
-			stepByStep[0] = []Matrix{*image.content}
-
-			for index, layer := range network {
-
-				//fmt.Println(stepByStep[index].rows, stepByStep[index].cols)
-				//i probably should use annonomous funtions
-				if layer.Operation == "maxPool" {
-					stepByStep[index+1], _ = MaxPool(stepByStep[index], layer.Step)
-				} else if layer.Operation == "convolve" {
-					stepByStep[index+1] = ConvolveLayer(stepByStep[index], layer)
-				} else if layer.Operation == "flatten" {
-					stepByStep[index+1] = []Matrix{*Flatten(stepByStep[index])}
-				} else if layer.Operation == "dense" {
-					stepByStep[index+1], _ = DenseLayer(stepByStep[index], layer)
-				} else if layer.Operation == "ReLU" {
-					stepByStep[index+1] = ReLU(stepByStep[index])
-				} else if layer.Operation == "softMax" {
-					stepByStep[index+1] = softMax(stepByStep[index])
-				} else {
-					panic("invalid operation key")
-				}
-			}
-
-			//we are gonna do some (more) cheating i think
-			//expected := Initialize(1, 10)
-			//(*expected.data) = [][]float64{{0, 0, 0, 0, 0, 0, 0, 0, 0, 0}} //whats this Initialize function good for anyway
-			//(*expected.data)[1][image.label] = 1
-
-			//this part is poorly abstracted but idc, ... now it is (less) poorly abstracted
-			/*
-				input := stepByStep[length]
-				total := 0.0
-				for _, row := range input.data {
-					for _, value := range row {
-						total += math.Pow(math.E, value)
-					}
-				}
-
-				output := Initialize(input.rows, input.cols)
-				for i := range (*input).rows {
-					for j := range (*input).cols {
-						output.data[i][j] = math.Pow(math.E, input.data[i][j]) / total
-					}
-				}
-
-				exponet := math.Pow(math.E, output.data[0][image.label])
-
-
-				//dLoss := Initialize(1, 2)*/
-
-			/*
-				totalSquared := total * total
-				for i := range dLoss.cols {
-					if i == image.label {
-
-						dLoss.data[0][i] = entropySlope * ((total)*exponet - (exponet)*(exponet)) / (totalSquared)
-					} else {
-						dLoss.data[0][i] = entropySlope * -1 * exponet / totalSquared
-					}
-					//if stepByStep[length].data[0][i] == 0 {
-					//	dLoss.data[0][i] = math.Min(dLoss.data[0][i], 0)
-					//}
-				}*/
-
-			//now only the loss function is implementeded badly
-			//dLoss := Initialize(1, 10)
-			//dLoss.data[0][image.label] = (-1.0 / stepByStep[length].data[0][image.label])
-			/*dLoss := make([]Matrix, 1)
-			dLoss[0] = (*Initialize(1, 1))
-			dLoss[0].data[0][0] = 2 * (stepByStep[length][0].data[0][0] - float64(image.label))*/
-			dLoss := make([]Matrix, 1)
-			dLoss[0] = *Initialize(1, stepByStep[length][0].cols)
-
-			entropySlope := (-1.0 / stepByStep[length][0].data[0][image.label])
-			dLoss[0].data[0][image.label] = entropySlope
-			backPropogation(network, changes, stepByStep, dLoss, length-1)
-
+			input <- image
 			//time.Sleep(time.Second / 10)
 			//fmt.Scanln()
 
 		}
 
 		//descend gradient
-		for index, layer := range network {
-			if layer.Operation == "convolve" {
-				for i, kernel := range changes[index].Kernels {
-					kernel.scale(learningRate)
-					network[index].Kernels[i] = (*MatrixAdd(&layer.Kernels[i], &kernel))
-
-				}
-			}
-			if layer.Operation == "dense" {
-
-				changes[index].Weights.scale(learningRate)
-				network[index].Weights = MatrixAdd(layer.Weights, changes[index].Weights)
-
-				changes[index].Biases.scale(learningRate * 50)
-				network[index].Biases = MatrixAdd(layer.Biases, changes[index].Biases)
-			}
-		}
 
 	}
 	fmt.Println()
