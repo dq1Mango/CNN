@@ -129,7 +129,7 @@ func (matrix *Matrix) slice(row, col, height, width int) (*Matrix, error) {
 	slice := Initialize(height, width)
 
 	if row < 0 || col < 0 || row+height > matrix.rows || col+width > matrix.cols {
-		return slice, fmt.Errorf("Index out of range")
+		return slice, fmt.Errorf("index out of range")
 	}
 
 	for i := range height {
@@ -172,6 +172,7 @@ func Flatten(matricies []Matrix) *Matrix {
 	return earth
 }
 
+<<<<<<< HEAD
 func ReLU(matricies []Matrix) []Matrix {
 	activated := make([]Matrix, len(matricies))
 	for index, matrix := range matricies {
@@ -184,6 +185,8 @@ func ReLU(matricies []Matrix) []Matrix {
 				}*/
 				activated[index].data[i][j] = math.Max(0, matrix.data[i][j])
 			}
+=======
+>>>>>>> origin/main
 		}
 	}
 	return activated
@@ -192,7 +195,7 @@ func ReLU(matricies []Matrix) []Matrix {
 
 func PadRow(matrix *Matrix, padding int) {
 	for range padding {
-		var zeros = make([]float64, matrix.cols, matrix.cols)
+		var zeros = make([]float64, matrix.cols)
 		for j := range matrix.cols {
 			zeros[j] = 0
 		}
@@ -286,10 +289,13 @@ func Dense(input, weights, biases *Matrix) (*Matrix, error) {
 	return output, nil
 }
 
+<<<<<<< HEAD
 func DenseLayer(input []Matrix, dense Layer) ([]Matrix, error) {
 	output, err := Dense(&input[0], dense.Weights, dense.Biases)
 	return []Matrix{*output}, err
 }
+=======
+>>>>>>> origin/main
 
 func softMax(input []Matrix) []Matrix {
 	output := make([]Matrix, len(input))
@@ -470,7 +476,7 @@ func GetImage(path string) *Matrix {
 	}
 	pixels := Initialize(64, 64)
 	for i := range 64 {
-		pixels.data[i] = make([]float64, 64, 64)
+		pixels.data[i] = make([]float64, 64)
 	}
 
 	//lets hope your data looks exactly like mine
@@ -516,9 +522,12 @@ func GetData(trainPath, labelPath string, size int) []image {
 		if err != nil {
 			fmt.Println(err)
 		}
+<<<<<<< HEAD
 		_, err = label.ReadByte()
 		if err != nil {
 			fmt.Println(err)
+=======
+>>>>>>> origin/main
 		}
 	}
 
@@ -619,10 +628,13 @@ func zeroNetwork(network Network) Network {
 	return copyy
 }*/
 
+<<<<<<< HEAD
 func backPropogation(network, newNetwork Network, computed [][]Matrix, dLoss []Matrix, index int) {
 	//fmt.Println("cant find it: ", dLoss)
 	nextStep := make([]Matrix, len(computed[index]))
 	for depth := range nextStep {
+=======
+>>>>>>> origin/main
 
 		nextStep[depth] = (*Initialize(computed[index][0].rows, computed[index][0].cols))
 	}
@@ -1007,6 +1019,7 @@ func (network Network) Train(data []image, batchSize int, learningRate float64) 
 
 }
 
+// note that this is not used
 func hasNaN(matrix *Matrix) bool {
 	for i := range matrix.rows {
 		for j := range matrix.cols {
