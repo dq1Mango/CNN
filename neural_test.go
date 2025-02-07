@@ -53,6 +53,27 @@ func TestMatrixMultiply(t *testing.T) {
 	//t.Logf("Passed matrix multiplication")
 }
 
+func TestMatrixScale(t *testing.T) {
+	A := Initialize(2, 3)
+	A.data = [][]float64{
+		{1, 2, 3},
+		{2, 0, -2},
+	}
+	scaled := Initialize(2, 3)
+	scaled.data = [][]float64{
+		{2, 4, 6},
+		{4, 0, -4},
+	}
+
+	A.scale(2)
+
+	if slicesEqual(A.data, scaled.data) {
+		fmt.Println("Passed scaling ")
+	} else {
+		t.Errorf("So we found our issue")
+	}
+}
+
 func TestMatrixSlice(t *testing.T) {
 	A := Initialize(3, 4)
 	A.data = [][]float64{
@@ -75,6 +96,7 @@ func TestMatrixSlice(t *testing.T) {
 		t.Log("super thourough slice test passed...")
 	} else {
 		t.Errorf("womp womp slices dont work")
+		fmt.Println("womp womp")
 		fmt.Println((subSet.data))
 	}
 }
@@ -93,7 +115,7 @@ func TestReLU(t *testing.T) {
 		{3, 4, 0, 0},
 	}
 
-	ReLU(A)
+	A = ReLU(*A)
 
 	if slicesEqual(A.data, activated) {
 		t.Log("*extensive* activation layer function test passed ...")
@@ -116,7 +138,7 @@ func TestMaxPool(t *testing.T) {
 		{4, 3},
 	}
 
-	pooled, err := MaxPool(A, 2)
+	pooled, err := MaxPool(*A, 2)
 	if err != nil {
 		t.Errorf("max pooling just got dropped in a pool")
 	}
@@ -151,4 +173,56 @@ func TestConvolve(t *testing.T) {
 
 	//ok like i didnt wanna compute this by hand
 	fmt.Println(convolved.data)
+}
+
+func TestDense(t *testing.T) {
+	network := *(CreateNetwork())
+	network.Add(CreateDense(1, 1))
+	network[0].Weights.data[0][0] = 2
+	network[0].Biases.data[0][0] = 10
+
+	test := makeUpLinearTestData()
+	fmt.Println(network.Compute(*test))
+}
+
+func genLinearData() []image {
+	data := make([]image, 1000)
+	for i := range 10 {
+		for j := range 100 {
+			barelyMatrix := Initialize(1, 1)
+			barelyMatrix.data[0][0] = float64(i)
+			data[i*100+j] = image{
+				Content: barelyMatrix,
+				Label:   2*i + 10,
+			}
+		}
+	}
+	return data
+}
+
+func makeUpLinearTestData() *Matrix {
+	test := Initialize(1, 1)
+	test.data[0][0] = 101
+	return test
+}
+
+func TestBasicLinearRegression(t *testing.T) {
+	network := CreateNetwork()
+	network.Add(CreateDense(1, 1))
+	fmt.Println("random network:")
+	fmt.Println(network)
+	fmt.Println((*network)[0].Weights)
+	data := genLinearData()
+	test := makeUpLinearTestData()
+	for range 1 {
+		network.Train(data, 10, 0.0001)
+	}
+
+	fmt.Println()
+	fmt.Println((*network)[0].Weights)
+	fmt.Println((*network)[0].Biases)
+	fmt.Println(network)
+
+	fmt.Println(network.Compute(*test))
+
 }
