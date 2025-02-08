@@ -361,12 +361,6 @@ func CreateReLU() *Layer {
 	}
 }
 
-func CreateLeastSquares() *Layer {
-	return &Layer{
-		Operation: "leastSquares",
-	}
-}
-
 func CreateSoftMax() *Layer {
 	return &Layer{
 		Operation: "softMax",
@@ -428,6 +422,20 @@ func CreateDense(inputSize, outputSize int) *Layer {
 	}
 }
 
+func CreateLeastSquares(inputSize int) *Layer {
+	return &Layer{
+		Operation: "leastSquares",
+		Step:      inputSize,
+	}
+}
+
+func CreateCrossEntropy(inputSize int) *Layer {
+	return &Layer{
+		Operation: "crossEntropy",
+		Step:      inputSize,
+	}
+}
+
 type Network []Layer
 
 func CreateNetwork() *Network {
@@ -447,7 +455,7 @@ func truncateFloat(f float64, decimals int) float64 {
 func (network Network) Compute(input Matrix) ([]Matrix, error) {
 	current := []Matrix{input}
 
-	for _, layer := range network {
+	for _, layer := range network[:len(network)-1] {
 		//i probably should use annonomous funtions
 		//fmt.Println(current)
 		if layer.Operation == "maxPool" {
@@ -476,6 +484,8 @@ func (network Network) Compute(input Matrix) ([]Matrix, error) {
 			output.data[i][j] = truncateFloat(almost.data[i][j], 5)
 		}
 	}
+
+	//TODO: also return the appropriate loss here
 
 	//return current, nil
 	return []Matrix{*output}, nil
@@ -518,7 +528,7 @@ func round(b byte) float64 {
 	}
 }
 
-// this serves little purpose beyond compartmenalization -- except now it servers as an idx parse, which im sure is all anyone really wants
+// this serves little purpose beyond compartmenalization -- except now it servers as an idx parser, which im sure is all anyone really wants
 func GetData(trainPath, labelPath string, size int) []image {
 	data := make([]image, size)
 	training, err := os.Open(trainPath)
@@ -624,6 +634,10 @@ func zeroNetwork(network Network) Network {
 			copyy.Add(CreateReLU())
 		} else if layer.Operation == "softMax" {
 			copyy.Add(CreateSoftMax())
+		} else if layer.Operation == "leastSquares" {
+			copyy.Add(CreateLeastSquares(layer.Step))
+		} else if layer.Operation == "crossEntropy" {
+			copyy.Add(CreateCrossEntropy(layer.Step))
 		}
 	}
 
@@ -769,50 +783,6 @@ func backPropogation(network, newNetwork Network, computed [][]Matrix, dLoss []M
 	backPropogation(network, newNetwork, computed, nextStep, index-1)
 }
 
-func MakeUpData() []image {
-	examples := 100
-	data := make([]image, 6*examples)
-	for i := 0; i < 6*examples; i += 6 {
-		for flip := range 2 {
-			for j := range 3 {
-
-				example := Initialize(5, 5)
-				for k := range 5 {
-					example.data[((1-flip)*(j+1))+(flip)*k][(1-flip)*(k)+(flip*(j+1))] = 1
-
-				}
-				data[i+3*flip+j] = image{
-					Content: example,
-					Label:   flip,
-				}
-			}
-
-		}
-	}
-	return data
-}
-
-/*func MakeUpTestData() []Matrix {
-	vertical := Initialize(5, 5)
-	horizontal := Initialize(5, 5)
-
-	(*vertical).data = [][]float64{
-		{0, 0, 1, 0, 0},
-		{0, 0, 1, 0, 0},
-		{0, 0, 1, 0, 0},
-		{0, 0, 1, 0, 0},
-		{0, 0, 1, 0, 0},
-	}
-	(*horizontal).data = [][]float64{
-		{0, 0, 0, 0, 0},
-		{1, 1, 1, 1, 1},
-		{0, 0, 0, 0, 0},
-		{0, 0, 0, 0, 0},
-		{0, 0, 0, 0, 0},
-	}
-
-	return []Matrix{*vertical, *horizontal}
-}*/
 /*
 func MakeUpData() []image {
 	data := make([]image, 1000)
@@ -841,11 +811,10 @@ func worker(network Network, length int, input chan image, propogated chan Netwo
 		case instance := <-input:
 
 			//first we have to compute what the network would evaluate each layer to be in its current state
-			stepByStep := make([][]Matrix, length+1)
+			stepByStep := make([][]Matrix, length)
 			stepByStep[0] = []Matrix{*instance.Content}
 
-			for index, layer := range network {
-
+			for index, layer := range network[:length-1] {
 				//fmt.Println(stepByStep[index].rows, stepByStep[index].cols)
 				//i probably should use annonomous funtions
 				if layer.Operation == "maxPool" {
@@ -907,14 +876,20 @@ func worker(network Network, length int, input chan image, propogated chan Netwo
 				}*/
 
 			//now only the loss function is implementeded badly
-			//dLoss := Initialize(1, 10)
-			//dLoss.data[0][image.label] = (-1.0 / stepByStep[length].data[0][image.label])*/
+
+			dLoss := make([]Matrix, 1) //what a well name field
+			dLoss[0] = (*Initialize(1, network[length-1].Step))
+
+			//TODO: support more complex loss functions
+			if network[length-1].Operation == "leastSquares" {
+				dLoss[0].data[0][0] = 2 * (stepByStep[length-1][0].data[0][0] - float64(instance.Label))
+
+			} else if network[length-1].Operation == "crossEntropy" {
+				dLoss[0].data[0][instance.Label] = (-1.0 / stepByStep[length-1][0].data[0][instance.Label]) + 1 //i feel like this makes sense
+			}
 
 			//least sqaures
-			dLoss := make([]Matrix, 1)
 
-			dLoss[0] = (*Initialize(1, 1))
-			dLoss[0].data[0][0] = 2 * (stepByStep[length][0].data[0][0] - float64(instance.Label))
 			//fmt.Println()
 			//fmt.Println("input:", instance.Content.data[0][0])
 			//fmt.Println("expected: ", instance.Label)
@@ -929,7 +904,7 @@ func worker(network Network, length int, input chan image, propogated chan Netwo
 			dLoss[0].data[0][instance.Label] = entropySlope*/
 
 			changes := zeroNetwork(network)
-			backPropogation(network, changes, stepByStep, dLoss, length-1)
+			backPropogation(network, changes, stepByStep, dLoss, length-2)
 
 			propogated <- changes
 
@@ -1039,17 +1014,17 @@ func (network *Network) Train(data []image, batchSize int, learningRate float64)
 			die <- true
 		}
 
-		fmt.Println()
+		/*fmt.Println()
 		fmt.Println("original Network:")
 		fmt.Println((*network)[0].Weights)
 		fmt.Println((*network)[0].Biases)
 		fmt.Println("changes:")
 		fmt.Println(changes[0].Weights)
-		fmt.Println(changes[0].Biases)
+		fmt.Println(changes[0].Biases)*/
 
 		*network = addNetworks(*network, changes, learningRate)
 
-		fmt.Println("new network: ", (*network)[0].Weights, (*network)[0].Biases)
+		//fmt.Println("new network: ", (*network)[0].Weights, (*network)[0].Biases)
 
 		/*fmt.Println("new network:")
 		fmt.Println((*network)[0].Weights)

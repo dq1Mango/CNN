@@ -2,6 +2,7 @@ package neural
 
 import (
 	"fmt"
+	"math"
 	"testing"
 )
 
@@ -202,27 +203,92 @@ func genLinearData() []image {
 
 func makeUpLinearTestData() *Matrix {
 	test := Initialize(1, 1)
-	test.data[0][0] = 101
+	test.data[0][0] = 11
 	return test
 }
 
 func TestBasicLinearRegression(t *testing.T) {
 	network := CreateNetwork()
 	network.Add(CreateDense(1, 1))
-	fmt.Println("random network:")
-	fmt.Println(network)
-	fmt.Println((*network)[0].Weights)
+	network.Add(CreateLeastSquares(1))
 	data := genLinearData()
 	test := makeUpLinearTestData()
-	for range 1 {
-		network.Train(data, 10, 0.0001)
+	for range 10 {
+		network.Train(data, 10, 0.001)
 	}
 
-	fmt.Println()
-	fmt.Println((*network)[0].Weights)
-	fmt.Println((*network)[0].Biases)
-	fmt.Println(network)
+	computed, err := network.Compute(*test)
+	if err != nil {
+		t.Error(err)
+	}
 
-	fmt.Println(network.Compute(*test))
+	if math.Abs(32-computed[0].data[0][0]) < 1 {
+		t.Logf("basic linear regression passed")
+	} else {
+		t.Errorf("couldnt even pass the most basic case :skull")
+	}
+}
+
+func MakeUpConvolutionData() []image {
+	examples := 100
+	data := make([]image, 6*examples)
+	for i := 0; i < 6*examples; i += 6 {
+		for flip := range 2 {
+			for j := range 3 {
+
+				example := Initialize(5, 5)
+				for k := range 5 {
+					example.data[((1-flip)*(j+1))+(flip)*k][(1-flip)*(k)+(flip*(j+1))] = 1
+
+				}
+				data[i+3*flip+j] = image{
+					Content: example,
+					Label:   flip,
+				}
+			}
+
+		}
+	}
+	return data
+}
+
+func MakeUpConvolutionTestData() []Matrix {
+	vertical := Initialize(5, 5)
+	horizontal := Initialize(5, 5)
+
+	(*vertical).data = [][]float64{
+		{0, 0, 1, 0, 0},
+		{0, 0, 1, 0, 0},
+		{0, 0, 1, 0, 0},
+		{0, 0, 1, 0, 0},
+		{0, 0, 1, 0, 0},
+	}
+	(*horizontal).data = [][]float64{
+		{0, 0, 0, 0, 0},
+		{1, 1, 1, 1, 1},
+		{0, 0, 0, 0, 0},
+		{0, 0, 0, 0, 0},
+		{0, 0, 0, 0, 0},
+	}
+
+	return []Matrix{*vertical, *horizontal}
+}
+func TestBasicConvolutionLayer(t *testing.T) {
+	network := CreateNetwork()
+	network.Add(CreateConvolution(3, 3, 1, 1))
+	network.Add(CreateFlatten())
+	network.Add(CreateDense(9, 2))
+	network.Add(CreateSoftMax())
+	network.Add(CreateCrossEntropy(2))
+
+	data := MakeUpConvolutionData()
+	for range 10 {
+		network.Train(data, 10, 0.001)
+	}
+
+	tests := MakeUpConvolutionTestData()
+
+	fmt.Println(network.Compute(tests[0]))
+	fmt.Println(network.Compute(tests[1]))
 
 }
